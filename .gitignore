@@ -1,0 +1,8 @@
+build/
+build-*/
+.vscode/
+.idea/
+.vs/
+.cache/
+.clangd
+.DS_Store
