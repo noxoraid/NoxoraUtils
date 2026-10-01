@@ -4,7 +4,7 @@
 
 > **Note:** Noxora is currently under development and may contain bugs. While the mod includes many features, some features may not work perfectly in every situation.
 
----
+----
 
 ## Credits
 
