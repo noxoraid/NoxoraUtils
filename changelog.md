@@ -4,6 +4,7 @@
 - **Table:** no more modal popups. Hack settings (Noclip, FPS Limiter, ...), the color picker, the hold-to-read description, and every Bot popup (select, load, delete, export, browse, new, info, merge) now open as floating windows that can be dragged, collapsed and closed with the X. They close by themselves when you confirm or cancel inside them.
 - **Table:** option selectors inside hack settings cycle with one tap instead of opening a popup. The Merge mode question is a floating window with two rows.
 - **Panel:** unchanged, it keeps its popups.
+- **Fix:** Windows, macOS and Android64 build errors. gd-imgui-cocos is now pulled from its `geode` branch (the `main` branch had `keyDown`, `keyUp` and `insertText` signatures that do not match Geode 5), and the ImGui settings form is held as `NXR::Form&` so the default arguments of `addSeparator`, `addConfigFloatInput` and `addConfigToggle` work again.
 
 # v1.4.2
 

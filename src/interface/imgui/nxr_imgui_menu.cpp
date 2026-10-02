@@ -529,7 +529,7 @@ namespace {
 
     void drawSettingsBody() {
         auto& config = NXRConfig::get();
-        auto& form = g_form;
+        NXR::Form& form = g_form;
 
         ImGui::TextUnformatted("Menu Layout");
         const int layout = NXR::Imgui::choice({"Panel", "Table"}, NXR::Ui::layout());
