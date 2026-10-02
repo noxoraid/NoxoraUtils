@@ -548,7 +548,7 @@ $execute {
             }, true)) popup->show();
         });
         tab->addConfigButton("Settings", [] {
-            if (auto* popup = NXRHackSettingsPopup::create(g_botSettings)) popup->show();
+            NXRHackSettingsPopup::open(g_botSettings, "panel:Bot");
         });
         tab->addText("Bot Type", 0.5f);
         tab->addRadioRow({"Auto", "Hold", "Click"},

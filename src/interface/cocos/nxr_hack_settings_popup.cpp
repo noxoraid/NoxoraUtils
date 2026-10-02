@@ -8,6 +8,7 @@
 #include <memory>
 #include <algorithm>
 #include "nxr_text_style.hpp"
+#include "nxr_table_layer.hpp"
 
 void updatePopupRowAlignment(cocos2d::CCMenu* row) {
     if (!row) return;
@@ -24,6 +25,10 @@ NXRHackSettingsPopup* NXRHackSettingsPopup::create(NXR::Hack& hack) {
     }
     delete ret;
     return nullptr;
+}
+
+void NXRHackSettingsPopup::open(NXR::Hack& hack, const std::string& origin) {
+    NXRTableLayer::openHackSettings(hack, origin);
 }
 
 bool NXRHackSettingsPopup::init(NXR::Hack& hack) {

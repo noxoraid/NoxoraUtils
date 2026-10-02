@@ -29,15 +29,13 @@ namespace NXR::Ui {
         return std::clamp(NXRConfig::get().get<int>(kToggleStyleKey, Switch), static_cast<int>(Switch), static_cast<int>(Checkbox));
     }
 
-    inline constexpr const char* kCheckOnFrame = "GJ_checkOn_001.png";
-    inline constexpr const char* kCheckOffFrame = "GJ_checkOff_001.png";
 
     // Drop-in replacement for CCMenuItemExt::createTogglerWithFilename with the NXR sprites.
     // `scale` is the size meant for the Switch, the Checkbox is sized to match.
     template <class Callback>
     inline CCMenuItemToggler* makeToggler(float scale, Callback&& callback) {
         if (toggleStyle() == Checkbox) {
-            return CCMenuItemExt::createTogglerWithFrameName(kCheckOnFrame, kCheckOffFrame, scale * 0.9f, std::forward<Callback>(callback));
+            return CCMenuItemExt::createTogglerWithFilename("NXR_tableCheckOn.png"_spr, "NXR_tableCheckOff.png"_spr, scale * 0.5f, std::forward<Callback>(callback));
         }
         return CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, scale, std::forward<Callback>(callback));
     }

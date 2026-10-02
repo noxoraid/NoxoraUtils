@@ -1,3 +1,11 @@
+# v1.4.2
+
+- **Table:** windows redrawn in the GDH style (dark windows, centered title, collapse arrow on the right). Every hack has an image check box on the left (res/NXR_tableCheckOn.png / NXR_tableCheckOff.png) and a triangle button on the right when it has settings.
+- **Table:** Bot now opens as a floating window with Record, Playback and the rest of the controls directly, no more "Bot Panel..." popup. Hack settings (Noclip, FPS Limiter, ...) and UI Settings also open as floating windows next to the row instead of the mobile popup. Tap the triangle again or the X to close them.
+- **Table:** windows can now be tapped and dragged while the game is paused. Touches are ignored while a popup is open.
+- **Toggle Style:** the Checkbox style now uses the image check boxes from res.
+- **Fix:** Windows build error, Zoom Bypass hooks EditorUI::zoomIn / zoomOut instead of the inlined zoomGameLayer.
+
 # v1.4.1
 
 - **Settings:** new **Open Menu Key**. Tap the key button, press a key, and that key opens and closes the menu on Windows and macOS (Tab by default). Esc or Clear removes it. It is saved and does not come back after a restart.

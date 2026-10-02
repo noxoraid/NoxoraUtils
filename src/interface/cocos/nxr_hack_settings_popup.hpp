@@ -23,6 +23,7 @@ public:
     cocos2d::CCMenu* m_currentRow = nullptr;
 
     static NXRHackSettingsPopup* create(NXR::Hack& hack);
+    static void open(NXR::Hack& hack, const std::string& origin = "");
 
     void prepareNewRow();
     void rebuild();

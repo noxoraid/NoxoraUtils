@@ -1,5 +1,4 @@
 #include "nxr_table_layer.hpp"
-#include "nxr_window_popup.hpp"
 #include "nxr_hack_settings_popup.hpp"
 #include "nxr_hacks_layer.hpp"
 #include "nxr_bot_popups.hpp"
@@ -17,16 +16,20 @@ using namespace geode::prelude;
 namespace {
     constexpr float kRowH = 20.f;
     constexpr float kTitleH = 22.f;
-    constexpr float kWinW = 150.f;
+    constexpr float kWinW = 160.f;
     constexpr float kGap = 6.f;
     constexpr float kDragThreshold = 6.f;
     constexpr float kLongPress = 0.6f;
     constexpr float kLabelScale = 0.42f;
-    constexpr float kWheelDir = 1.f; // flip to -1 if the mouse wheel feels inverted
+    constexpr float kWheelDir = 1.f;
+    constexpr int kTablePriority = -900;
+    constexpr int kHostPriority = -899;
 
     const ccColor3B kOnColor = {255, 255, 255};
-    const ccColor3B kOffColor = {150, 150, 155};
-    const ccColor3B kCheatOn = {255, 140, 140};
+    const ccColor3B kCheatColor = {255, 120, 140};
+    const ccColor4B kBodyColor = {34, 32, 62, 245};
+    const ccColor4B kTitleColor = {44, 42, 84, 252};
+    const ccColor4B kButtonColor = {72, 68, 142, 255};
 
     std::string key(const char* what, const std::string& name) {
         return std::string("nxr.table.") + what + "." + name;
@@ -43,9 +46,20 @@ namespace {
         }
     }
 
-    ccColor3B rowColor(bool enabled, bool cheating) {
-        if (!enabled) return kOffColor;
-        return NXR::Ui::textColor(cheating ? kCheatOn : kOnColor);
+    CCSprite* fitSprite(const char* file, float targetWidth) {
+        auto* sprite = CCSprite::create(file);
+        if (!sprite) return nullptr;
+        const float width = sprite->getContentSize().width;
+        if (width > 0.f) sprite->setScale(targetWidth / width);
+        return sprite;
+    }
+
+    void disableScrollInput(geode::ScrollLayer* scroll) {
+        if (!scroll) return;
+        scroll->setTouchEnabled(false);
+#ifdef GEODE_IS_DESKTOP
+        scroll->setMouseEnabled(false);
+#endif
     }
 }
 
@@ -57,6 +71,21 @@ NXRTableLayer::~NXRTableLayer() {
 
 NXRTableLayer* NXRTableLayer::get() { return s_instance; }
 bool NXRTableLayer::isOpened() { return s_instance != nullptr; }
+
+bool NXRTableLayer::popupBlocking() {
+    auto isAlert = [](CCNode* parent) {
+        if (!parent) return false;
+        auto* children = parent->getChildren();
+        if (!children) return false;
+        for (auto* child : CCArrayExt<CCNode*>(children)) {
+            if (child == s_instance) continue;
+            if (child->isVisible() && typeinfo_cast<FLAlertLayer*>(child)) return true;
+        }
+        return false;
+    };
+    if (isAlert(CCDirector::sharedDirector()->getRunningScene())) return true;
+    return isAlert(OverlayManager::get());
+}
 
 NXRTableLayer* NXRTableLayer::create() {
     auto* ret = new NXRTableLayer();
@@ -85,6 +114,28 @@ void NXRTableLayer::close() {
     layer->removeFromParent();
 }
 
+void NXRTableLayer::openHackSettings(NXR::Hack& hack, const std::string& origin) {
+    if (!s_instance) {
+        if (auto* popup = NXRHackSettingsPopup::create(hack)) popup->show();
+        return;
+    }
+    Spec spec;
+    spec.name = hack.getName() + " Settings";
+    spec.id = "settings:" + hack.getID() + ":" + hack.getName();
+    spec.kind = Kind::HackSettings;
+    spec.hack = &hack;
+    s_instance->openExtra(std::move(spec), origin);
+}
+
+void NXRTableLayer::openUiSettings(const std::string& origin) {
+    if (!s_instance) return;
+    Spec spec;
+    spec.name = "UI Settings";
+    spec.id = "panel:ui-settings";
+    spec.kind = Kind::UiSettings;
+    s_instance->openExtra(std::move(spec), origin);
+}
+
 bool NXRTableLayer::init() {
     if (!CCLayer::init()) return false;
 
@@ -98,9 +149,19 @@ bool NXRTableLayer::init() {
     return true;
 }
 
+void NXRTableLayer::onEnter() {
+    CCLayer::onEnter();
+    this->applyHostPriority();
+}
+
 void NXRTableLayer::registerWithTouchDispatcher() {
-    // Above the game and its menus (-128), below popups (-500) and the floating button (-1000)
-    CCTouchDispatcher::get()->addTargetedDelegate(this, -300, true);
+    CCTouchDispatcher::get()->addTargetedDelegate(this, kTablePriority, true);
+}
+
+void NXRTableLayer::applyHostPriority() {
+    for (auto& w : m_wins) {
+        if (w.panel() && w.node) geode::cocos::handleTouchPriorityWith(w.node, kHostPriority, true);
+    }
 }
 
 void NXRTableLayer::update(float dt) {
@@ -108,10 +169,9 @@ void NXRTableLayer::update(float dt) {
     if (m_refreshTimer >= 0.2f) {
         m_refreshTimer = 0.f;
         this->refreshRows();
+        this->applyHostPriority();
     }
 }
-
-// ---------------------------------------------------------------- building
 
 std::vector<NXRTableLayer::Row> NXRTableLayer::settingsRows() {
     std::vector<Row> rows;
@@ -153,35 +213,24 @@ std::vector<NXRTableLayer::Row> NXRTableLayer::settingsRows() {
     }
     {
         Row r;
-        r.text = [] { return std::string("Toggle Style: ") + (NXR::Ui::toggleStyle() == NXR::Ui::Checkbox ? "Checkbox" : "Switch"); };
-        r.onTap = [] {
-            NXRConfig::get().set<int>(NXR::Ui::kToggleStyleKey, NXR::Ui::toggleStyle() == NXR::Ui::Checkbox ? NXR::Ui::Switch : NXR::Ui::Checkbox);
-            NXR::Ui::reopenMenu();
-        };
-        rows.push_back(std::move(r));
-    }
-    {
-        Row r;
         r.label = "Open Menu Key / Font...";
-        r.onTap = [] {
-            if (auto* popup = NXRWindowPopup::create("Settings", [](NXRHacksTab* tab) { nxrBuildSettingsTab(tab); })) popup->show();
-        };
+        r.onTap = [] { NXRTableLayer::openUiSettings("Settings"); };
         rows.push_back(std::move(r));
     }
     {
         Row r;
         r.label = "Reset Window Positions";
         r.onTap = [] {
+            auto* layer = NXRTableLayer::get();
+            if (!layer) return;
             auto& config = NXRConfig::get();
-            for (auto& window : NXR::Gui::get().getWindows()) {
-                config.set<float>(key("x", window.getName()), -1.f);
-                config.set<float>(key("y", window.getName()), -1.f);
-                config.set<bool>(key("collapsed", window.getName()), false);
+            for (auto& w : layer->m_wins) {
+                if (w.closable) continue;
+                config.set<float>(key("x", w.id), -1.f);
+                config.set<float>(key("y", w.id), -1.f);
+                config.set<bool>(key("collapsed", w.id), false);
             }
-            config.set<float>(key("x", "Settings"), -1.f);
-            config.set<float>(key("y", "Settings"), -1.f);
-            config.set<bool>(key("collapsed", "Settings"), false);
-            if (auto* layer = NXRTableLayer::get()) layer->rebuild(false);
+            layer->rebuild(false);
         };
         rows.push_back(std::move(r));
     }
@@ -201,18 +250,26 @@ void NXRTableLayer::rebuild(bool save) {
     m_row = -1;
     this->unschedule(schedule_selector(NXRTableLayer::onLongPress));
 
-    struct Pending {
-        std::string name;
-        std::vector<Row> rows;
-    };
-    std::vector<Pending> pending;
+    std::vector<Spec> pending;
 
     for (auto& window : NXR::Gui::get().getWindows()) {
         const std::string name = window.getName();
         if (name == "Settings") continue;
 
-        Pending p;
-        p.name = name;
+        const bool hasPanel = window.avaibleCustomWindowCocos();
+
+        if (hasPanel) {
+            Spec panel;
+            panel.name = name;
+            panel.id = "panel:" + name;
+            panel.kind = Kind::BotPanel;
+            panel.windowName = name;
+            pending.push_back(std::move(panel));
+        }
+
+        Spec spec;
+        spec.name = hasPanel ? name + " Hacks" : name;
+        spec.id = spec.name;
 
         for (auto& hack : window.getHacks()) {
             Row r;
@@ -223,40 +280,37 @@ void NXRTableLayer::rebuild(bool save) {
             r.disabled = hack.getDisabled();
             if (hack.avaibleCustomWindowCocos()) {
                 const std::string id = hack.getID();
-                r.onSettings = [id] {
-                    if (auto* h = NXR::Gui::get().findHackByIDGlobal(id)) {
-                        if (auto* popup = NXRHackSettingsPopup::create(*h)) popup->show();
-                    }
+                const std::string origin = spec.name;
+                r.onSettings = [id, origin] {
+                    if (auto* h = NXR::Gui::get().findHackByIDGlobal(id)) NXRTableLayer::openHackSettings(*h, origin);
                 };
             }
-            p.rows.push_back(std::move(r));
+            spec.rows.push_back(std::move(r));
         }
 
-        if (window.avaibleCustomWindowCocos()) {
-            Row r;
-            r.label = name + " Panel...";
-            r.onTap = [name] {
-                auto* popup = NXRWindowPopup::create(name, [name](NXRHacksTab* tab) {
-                    tab->addPadding(2.5f);
-                    NXR::Gui::get().getWindow(name).callCustomWindowCocos(tab);
-                });
-                if (popup) popup->show();
-            };
-            // Custom controls (record, playback...) go first, they are what people reach for
-            p.rows.insert(p.rows.begin(), std::move(r));
-        }
-
-        if (!p.rows.empty()) pending.push_back(std::move(p));
+        if (!spec.rows.empty()) pending.push_back(std::move(spec));
     }
 
-    pending.push_back({"Settings", this->settingsRows()});
+    {
+        Spec spec;
+        spec.name = "Settings";
+        spec.id = "Settings";
+        spec.rows = this->settingsRows();
+        pending.push_back(std::move(spec));
+    }
 
     const int total = static_cast<int>(pending.size());
     int index = 0;
-    for (auto& p : pending) {
-        this->buildWindow(p.name, std::move(p.rows), index++, total);
+    for (auto& spec : pending) {
+        this->buildWindow(std::move(spec), index++, total);
     }
 
+    auto extras = m_extras;
+    for (auto& spec : extras) {
+        this->buildWindow(spec, 0, 0);
+    }
+
+    this->applyHostPriority();
     this->refreshRows();
 }
 
@@ -265,7 +319,7 @@ void NXRTableLayer::drawArrow(Win& w) {
     w.arrow->clear();
 
     const ccColor4F color = {1.f, 1.f, 1.f, 0.95f};
-    const float cx = 11.f;
+    const float cx = w.width - 11.f;
     const float cy = -kTitleH / 2.f;
 
     if (w.collapsed) {
@@ -277,124 +331,270 @@ void NXRTableLayer::drawArrow(Win& w) {
     }
 }
 
-void NXRTableLayer::buildWindow(const std::string& name, std::vector<Row> rows, int index, int total) {
+void NXRTableLayer::buildWindow(Spec spec, int index, int total) {
     auto& config = NXRConfig::get();
     const float scale = NXR::Ui::tableScale();
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
+    const float maxBody = std::max(kRowH * 3.f, (winSize.height - 12.f) / scale - kTitleH);
 
     m_wins.emplace_back();
     Win& w = m_wins.back();
-    w.name = name;
-    w.rows = std::move(rows);
-    w.contentH = static_cast<float>(w.rows.size()) * kRowH;
-
-    const float maxBody = std::max(kRowH * 3.f, (winSize.height - 12.f) / scale - kTitleH);
-    w.bodyH = std::min(w.contentH, maxBody);
-
-    // Not enough room for every window side by side: start collapsed so the title bars wrap into a grid
-    const bool crowded = static_cast<float>(total) * (kWinW * scale + kGap) + kGap > winSize.width;
-    w.collapsed = config.get<bool>(key("collapsed", name), crowded);
+    w.name = spec.name;
+    w.id = spec.id;
+    w.kind = spec.kind;
+    w.hack = spec.hack;
+    w.closable = spec.closable;
 
     w.node = CCNode::create();
     w.node->setScale(scale);
     this->addChild(w.node);
 
-    // Title bar
-    auto* title = CCLayerColor::create(ccc4(NXR::Theme::accent().r, NXR::Theme::accent().g, NXR::Theme::accent().b, 245), kWinW, kTitleH);
+    float hostScale = 1.f;
+    float hostW = 0.f;
+    float hostH = 0.f;
+    CCNode* hostNode = nullptr;
+    geode::Ref<CCNode> hostKeep;
+
+    if (w.panel()) {
+        if (spec.kind == Kind::HackSettings && spec.hack) {
+            auto* popup = NXRHackSettingsPopup::create(*spec.hack);
+            if (popup) {
+                w.owner = popup;
+                geode::Ref<geode::ScrollLayer> keep(popup->m_scrollLayer);
+                keep->removeFromParent();
+                keep->setPosition({0.f, 0.f});
+                disableScrollInput(keep.data());
+                w.scroll = keep.data();
+                hostNode = keep.data();
+                hostW = 240.f;
+                hostH = 190.f;
+                hostScale = 0.8f;
+            }
+        } else {
+            auto* tab = NXRHacksTab::create();
+            if (tab) {
+                if (spec.kind == Kind::BotPanel) {
+                    tab->addPadding(2.5f);
+                    NXR::Gui::get().getWindow(spec.windowName).callCustomWindowCocos(tab);
+                } else {
+                    nxrBuildSettingsTab(tab);
+                }
+                tab->m_scrollLayer->m_contentLayer->updateLayout();
+                tab->m_scrollLayer->setPosition({0.f, 0.f});
+                tab->m_scrollLayer->moveToTop();
+                disableScrollInput(tab->m_scrollLayer);
+                w.owner = tab;
+                w.scroll = tab->m_scrollLayer;
+                hostNode = tab;
+                hostW = 360.f;
+                hostH = 250.f;
+                hostScale = 0.62f;
+            }
+        }
+
+        if (!hostNode) {
+            hostNode = CCNode::create();
+            hostW = 120.f;
+            hostH = 40.f;
+            hostScale = 1.f;
+        }
+
+        hostKeep = hostNode;
+        if (hostH * hostScale > maxBody) hostScale = maxBody / hostH;
+
+        w.width = hostW * hostScale;
+        w.contentH = hostH * hostScale;
+        w.bodyH = w.contentH;
+    } else {
+        w.width = kWinW;
+        w.rows = std::move(spec.rows);
+        w.contentH = static_cast<float>(w.rows.size()) * kRowH;
+        w.bodyH = std::min(w.contentH, maxBody);
+    }
+
+    const bool crowded = static_cast<float>(total) * (kWinW * scale + kGap) + kGap > winSize.width;
+    w.collapsed = w.closable ? false : config.get<bool>(key("collapsed", w.id), crowded);
+
+    auto accent = NXR::Theme::accent();
+
+    auto* title = CCLayerColor::create(kTitleColor, w.width, kTitleH);
     title->setPosition({0.f, -kTitleH});
     w.node->addChild(title);
 
-    auto* titleLabel = geode::Label::create(name, "GoogleSans.fnt"_spr);
-    titleLabel->setAnchorPoint({0.f, 0.5f});
+    auto* line = CCLayerColor::create(ccc4(accent.r, accent.g, accent.b, 255), w.width, 1.5f);
+    line->setPosition({0.f, -kTitleH});
+    w.node->addChild(line);
+
+    auto* titleLabel = geode::Label::create(w.name, "GoogleSans.fnt"_spr);
+    titleLabel->setAnchorPoint({0.5f, 0.5f});
     titleLabel->setScale(0.5f * NXR::Ui::fontScale());
-    titleLabel->setPosition({22.f, -kTitleH / 2.f});
+    const float titleMax = w.width - (w.closable ? 52.f : 30.f);
+    if (titleLabel->getScaledContentWidth() > titleMax) {
+        titleLabel->setScale(titleLabel->getScale() * (titleMax / titleLabel->getScaledContentWidth()));
+    }
+    titleLabel->setPosition({(w.closable ? w.width / 2.f - 8.f : w.width / 2.f - 4.f), -kTitleH / 2.f});
     titleLabel->setColor({255, 255, 255});
     w.node->addChild(titleLabel);
+
+    if (w.closable) {
+        if (auto* close = fitSprite("NXR_tableClose.png"_spr, 9.f)) {
+            close->setPosition({w.width - 30.f, -kTitleH / 2.f});
+            w.node->addChild(close);
+        }
+    }
 
     w.arrow = CCDrawNode::create();
     w.node->addChild(w.arrow);
     this->drawArrow(w);
 
-    // Body
-    w.body = CCLayerColor::create(ccc4(32, 32, 36, 238), kWinW, w.bodyH);
+    w.body = CCLayerColor::create(kBodyColor, w.width, w.bodyH);
     w.body->setPosition({0.f, -kTitleH - w.bodyH});
     w.node->addChild(w.body);
 
-    w.scroll = geode::ScrollLayer::create({kWinW, w.bodyH});
-    w.scroll->setPosition({0.f, -kTitleH - w.bodyH});
-    w.scroll->setTouchEnabled(false);
-#ifdef GEODE_IS_DESKTOP
-    w.scroll->setMouseEnabled(false);
-#endif
-    w.scroll->m_contentLayer->setContentSize({kWinW, w.contentH});
-    w.scroll->m_contentLayer->setPositionY(w.bodyH - w.contentH);
-    w.node->addChild(w.scroll);
+    if (w.panel()) {
+        w.host = hostNode;
+        w.host->setScale(hostScale);
+        w.host->setPosition({0.f, -kTitleH - w.bodyH});
+        w.node->addChild(w.host);
+        w.host->setVisible(!w.collapsed);
+    } else {
+        w.scroll = geode::ScrollLayer::create({w.width, w.bodyH});
+        w.scroll->setPosition({0.f, -kTitleH - w.bodyH});
+        disableScrollInput(w.scroll);
+        w.scroll->m_contentLayer->setContentSize({w.width, w.contentH});
+        w.scroll->m_contentLayer->setPositionY(w.bodyH - w.contentH);
+        w.node->addChild(w.scroll);
 
-    for (size_t i = 0; i < w.rows.size(); i++) {
-        Row& r = w.rows[i];
-        const float y = w.contentH - static_cast<float>(i + 1) * kRowH;
+        for (size_t i = 0; i < w.rows.size(); i++) {
+            Row& r = w.rows[i];
+            r.width = w.width;
+            const float y = w.contentH - static_cast<float>(i + 1) * kRowH;
+            const bool hackRow = !r.hackId.empty();
 
-        const bool checkbox = !r.hackId.empty() && NXR::Ui::toggleStyle() == NXR::Ui::Checkbox;
-        const float labelX = checkbox ? 24.f : 7.f;
-
-        r.labelNode = geode::Label::create(r.text ? r.text() : r.label, "GoogleSans.fnt"_spr);
-        r.labelNode->setAnchorPoint({0.f, 0.5f});
-        r.labelNode->setPosition({labelX, y + kRowH / 2.f});
-        r.labelNode->setScale(kLabelScale * NXR::Ui::fontScale());
-        const float maxWidth = kWinW - labelX - (r.onSettings ? 20.f : 12.f);
-        if (r.labelNode->getScaledContentWidth() > maxWidth) {
-            r.labelNode->setScale(r.labelNode->getScale() * (maxWidth / r.labelNode->getScaledContentWidth()));
-        }
-        w.scroll->m_contentLayer->addChild(r.labelNode);
-
-        if (checkbox) {
-            r.checkOn = CCSprite::createWithSpriteFrameName(NXR::Ui::kCheckOnFrame);
-            r.checkOff = CCSprite::createWithSpriteFrameName(NXR::Ui::kCheckOffFrame);
-            for (auto* sprite : {r.checkOn, r.checkOff}) {
-                sprite->setScale(0.4f);
-                sprite->setPosition({13.f, y + kRowH / 2.f});
-                w.scroll->m_contentLayer->addChild(sprite);
+            if (!hackRow) {
+                auto* bg = CCLayerColor::create(kButtonColor, w.width - 8.f, kRowH - 3.f);
+                bg->setPosition({4.f, y + 1.5f});
+                w.scroll->m_contentLayer->addChild(bg);
             }
-        } else if (!r.hackId.empty()) {
-            r.bar = CCLayerColor::create(ccc4(255, 255, 255, 235), 3.f, kRowH - 8.f);
-            r.bar->setPosition({kWinW - 6.f, y + 4.f});
-            w.scroll->m_contentLayer->addChild(r.bar);
+
+            r.labelNode = geode::Label::create(r.text ? r.text() : r.label, "GoogleSans.fnt"_spr);
+            if (hackRow) {
+                r.labelNode->setAnchorPoint({0.f, 0.5f});
+                r.labelNode->setPosition({32.f, y + kRowH / 2.f});
+            } else {
+                r.labelNode->setAnchorPoint({0.5f, 0.5f});
+                r.labelNode->setPosition({w.width / 2.f, y + kRowH / 2.f});
+            }
+            r.labelNode->setScale(kLabelScale * NXR::Ui::fontScale());
+            const float maxWidth = hackRow ? w.width - 32.f - (r.onSettings ? 24.f : 8.f) : w.width - 16.f;
+            if (r.labelNode->getScaledContentWidth() > maxWidth) {
+                r.labelNode->setScale(r.labelNode->getScale() * (maxWidth / r.labelNode->getScaledContentWidth()));
+            }
+            w.scroll->m_contentLayer->addChild(r.labelNode);
+
+            if (hackRow) {
+                r.checkOn = fitSprite("NXR_tableCheckOn.png"_spr, 22.f);
+                r.checkOff = fitSprite("NXR_tableCheckOff.png"_spr, 22.f);
+                for (auto* sprite : {r.checkOn, r.checkOff}) {
+                    if (!sprite) continue;
+                    sprite->setPosition({18.f, y + kRowH / 2.f});
+                    w.scroll->m_contentLayer->addChild(sprite);
+                }
+            }
+
+            if (r.onSettings) {
+                if (auto* arrow = fitSprite("NXR_tableArrow.png"_spr, 13.f)) {
+                    arrow->setPosition({w.width - 13.f, y + kRowH / 2.f});
+                    w.scroll->m_contentLayer->addChild(arrow);
+                }
+            }
         }
 
-        if (r.onSettings) {
-            auto* corner = CCDrawNode::create();
-            CCPoint tri[3] = {{kWinW - 12.f, y + 2.f}, {kWinW - 4.f, y + 2.f}, {kWinW - 4.f, y + 10.f}};
-            const ccColor4F color = {0.65f, 0.65f, 0.7f, 1.f};
-            corner->drawPolygon(tri, 3, color, 0.f, color);
-            w.scroll->m_contentLayer->addChild(corner);
-        }
+        w.scroll->setVisible(!w.collapsed);
     }
 
     w.body->setVisible(!w.collapsed);
-    w.scroll->setVisible(!w.collapsed);
 
-    // Position: remembered, otherwise a left to right flow that wraps
-    float x = config.get<float>(key("x", name), -1.f);
-    float y = config.get<float>(key("y", name), -1.f);
+    float x = spec.x >= 0.f ? spec.x : config.get<float>(key("x", w.id), -1.f);
+    float y = spec.y >= 0.f ? spec.y : config.get<float>(key("y", w.id), -1.f);
+    if (w.closable) {
+        x = spec.x;
+        y = spec.y;
+    }
     if (x < 0.f || y < 0.f) {
         const float cell = kWinW * scale + kGap;
         const int perRow = std::max(1, static_cast<int>((winSize.width - kGap) / cell));
         const int col = index % perRow;
-        const int line = index / perRow;
+        const int line2 = index / perRow;
         const float lineH = w.collapsed ? (kTitleH * scale + kGap) : (winSize.height - 12.f);
         x = kGap + static_cast<float>(col) * cell;
-        y = winSize.height - kGap - static_cast<float>(line) * lineH;
+        y = winSize.height - kGap - static_cast<float>(line2) * lineH;
     }
     w.node->setPosition(this->clampTopLeft(w, {x, y}));
 }
 
-// ---------------------------------------------------------------- state
+int NXRTableLayer::findById(const std::string& id) const {
+    for (size_t i = 0; i < m_wins.size(); i++) {
+        if (m_wins[i].id == id) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+void NXRTableLayer::closeWindow(int index) {
+    if (index < 0 || index >= static_cast<int>(m_wins.size())) return;
+    const std::string id = m_wins[index].id;
+    if (m_wins[index].node) m_wins[index].node->removeFromParent();
+    m_wins.erase(m_wins.begin() + index);
+    m_extras.erase(std::remove_if(m_extras.begin(), m_extras.end(), [&](const Spec& s) { return s.id == id; }), m_extras.end());
+    m_grab = Grab::None;
+    m_active = -1;
+    m_row = -1;
+}
+
+void NXRTableLayer::openExtra(Spec spec, const std::string& origin) {
+    const int existing = this->findById(spec.id);
+    if (existing >= 0) {
+        this->closeWindow(existing);
+        return;
+    }
+
+    const float scale = NXR::Ui::tableScale();
+    const auto winSize = CCDirector::sharedDirector()->getWinSize();
+    spec.closable = true;
+
+    float x = kGap;
+    float y = winSize.height - kGap;
+    const int originIndex = origin.empty() ? -1 : this->findById(origin);
+    if (originIndex >= 0) {
+        const Win& o = m_wins[originIndex];
+        x = o.node->getPositionX() + o.width * scale + kGap;
+        y = o.node->getPositionY() - static_cast<float>(m_extras.size()) * 8.f;
+    }
+    spec.x = x;
+    spec.y = y;
+
+    m_extras.push_back(spec);
+    this->buildWindow(spec, 0, 0);
+
+    const int index = static_cast<int>(m_wins.size()) - 1;
+    Win& w = m_wins[index];
+    if (originIndex >= 0 && w.node->getPositionX() + w.width * scale > winSize.width - 0.5f) {
+        const Win& o = m_wins[originIndex];
+        w.node->setPosition(this->clampTopLeft(w, {o.node->getPositionX() - w.width * scale - kGap, y}));
+    }
+
+    this->bringToFront(index);
+    this->applyHostPriority();
+    this->refreshRows();
+}
 
 void NXRTableLayer::refreshRow(Row& row) {
     if (!row.labelNode) return;
 
-    bool enabled = false;
-    if (!row.hackId.empty()) {
+    const bool hackRow = !row.hackId.empty();
+    bool enabled = true;
+    if (hackRow) {
+        enabled = false;
         if (auto* hack = NXR::Gui::get().findHackByIDGlobal(row.hackId)) enabled = hack->getEnabled();
     } else if (row.text) {
         const std::string text = row.text();
@@ -403,26 +603,26 @@ void NXRTableLayer::refreshRow(Row& row) {
             const float scale = kLabelScale * NXR::Ui::fontScale();
             row.labelNode->setString(text.c_str());
             row.labelNode->setScale(scale);
-            const float maxWidth = kWinW - 7.f - 12.f;
+            const float maxWidth = row.width - 16.f;
             if (row.labelNode->getScaledContentWidth() > maxWidth) {
                 row.labelNode->setScale(scale * (maxWidth / row.labelNode->getScaledContentWidth()));
             }
         }
-        enabled = true;
-    } else {
-        enabled = true;
     }
 
-    row.labelNode->setColor(row.hackId.empty() ? NXR::Ui::textColor(kOnColor) : rowColor(enabled, row.cheating));
+    if (hackRow) {
+        row.labelNode->setColor(NXR::Ui::textColor(row.cheating ? kCheatColor : kOnColor));
+    } else {
+        row.labelNode->setColor(NXR::Ui::textColor(kOnColor));
+    }
     if (row.disabled) row.labelNode->setOpacity(100);
-    if (row.bar) row.bar->setVisible(enabled && !row.hackId.empty());
     if (row.checkOn) row.checkOn->setVisible(enabled);
     if (row.checkOff) row.checkOff->setVisible(!enabled);
 }
 
 void NXRTableLayer::refreshRows() {
     for (auto& w : m_wins) {
-        if (w.collapsed) continue;
+        if (w.collapsed || w.panel()) continue;
         for (auto& row : w.rows) this->refreshRow(row);
     }
 }
@@ -431,9 +631,18 @@ void NXRTableLayer::savePositions() {
     auto& config = NXRConfig::get();
     for (auto& w : m_wins) {
         if (!w.node) continue;
-        config.set<float>(key("x", w.name), w.node->getPositionX());
-        config.set<float>(key("y", w.name), w.node->getPositionY());
-        config.set<bool>(key("collapsed", w.name), w.collapsed);
+        if (w.closable) {
+            for (auto& extra : m_extras) {
+                if (extra.id == w.id) {
+                    extra.x = w.node->getPositionX();
+                    extra.y = w.node->getPositionY();
+                }
+            }
+            continue;
+        }
+        config.set<float>(key("x", w.id), w.node->getPositionX());
+        config.set<float>(key("y", w.id), w.node->getPositionY());
+        config.set<bool>(key("collapsed", w.id), w.collapsed);
     }
 }
 
@@ -444,7 +653,7 @@ float NXRTableLayer::windowHeight(const Win& w) const {
 CCPoint NXRTableLayer::clampTopLeft(const Win& w, CCPoint p) const {
     const auto winSize = CCDirector::sharedDirector()->getWinSize();
     const float scale = w.node ? w.node->getScale() : 1.f;
-    const float width = kWinW * scale;
+    const float width = w.width * scale;
     const float height = windowHeight(w) * scale;
 
     p.x = std::clamp(p.x, 0.f, std::max(0.f, winSize.width - width));
@@ -459,8 +668,6 @@ void NXRTableLayer::bringToFront(int index) {
     m_wins[index].node->setZOrder(top + 1);
 }
 
-// ---------------------------------------------------------------- hit testing
-
 int NXRTableLayer::windowAt(const CCPoint& world) const {
     int best = -1;
     int bestZ = -1;
@@ -468,7 +675,7 @@ int NXRTableLayer::windowAt(const CCPoint& world) const {
         const Win& w = m_wins[i];
         if (!w.node) continue;
         const auto p = w.node->convertToNodeSpace(world);
-        if (p.x < 0.f || p.x > kWinW) continue;
+        if (p.x < 0.f || p.x > w.width) continue;
         if (p.y > 0.f || p.y < -windowHeight(w)) continue;
         if (w.node->getZOrder() >= bestZ) {
             bestZ = w.node->getZOrder();
@@ -479,40 +686,45 @@ int NXRTableLayer::windowAt(const CCPoint& world) const {
 }
 
 int NXRTableLayer::rowAt(Win& w, const CCPoint& world) const {
-    if (w.collapsed || !w.scroll) return -1;
+    if (w.collapsed || !w.scroll || w.panel()) return -1;
     const auto p = w.scroll->m_contentLayer->convertToNodeSpace(world);
-    if (p.x < 0.f || p.x > kWinW) return -1;
+    if (p.x < 0.f || p.x > w.width) return -1;
     const int index = static_cast<int>(std::floor((w.contentH - p.y) / kRowH));
     if (index < 0 || index >= static_cast<int>(w.rows.size())) return -1;
     return index;
 }
 
 void NXRTableLayer::scrollBy(Win& w, float dy, bool clamp) {
-    if (!w.scroll || w.contentH <= w.bodyH) return;
+    if (!w.scroll || w.panel() || w.contentH <= w.bodyH) return;
     auto* content = w.scroll->m_contentLayer;
     const float minY = w.bodyH - w.contentH;
     const float slack = clamp ? 0.f : 12.f;
     content->setPositionY(std::clamp(content->getPositionY() + dy, minY - slack, slack));
 }
 
-// ---------------------------------------------------------------- input
-
 bool NXRTableLayer::ccTouchBegan(CCTouch* touch, CCEvent*) {
+    if (popupBlocking()) return false;
+
     const auto world = touch->getLocation();
     const int index = this->windowAt(world);
-    if (index < 0) return false; // clicks outside every window go to the game
+    if (index < 0) return false;
 
     Win& w = m_wins[index];
     this->bringToFront(index);
+
+    const auto local = w.node->convertToNodeSpace(world);
+    if (w.panel() && local.y <= -kTitleH) {
+        this->applyHostPriority();
+        return false;
+    }
 
     m_active = index;
     m_moved = false;
     m_longPressed = false;
     m_start = world;
-    m_lastLocal = w.node->convertToNodeSpace(world);
+    m_lastLocal = local;
     m_row = -1;
 
-    const auto local = m_lastLocal;
     if (local.y > -kTitleH) {
         m_grab = Grab::Title;
         m_grabOffset = w.node->getPosition() - this->convertToNodeSpace(world);
@@ -558,21 +770,28 @@ void NXRTableLayer::ccTouchMoved(CCTouch* touch, CCEvent*) {
 }
 
 void NXRTableLayer::ccTouchEnded(CCTouch* touch, CCEvent*) {
-    // A tap can close or rebuild this layer (layout switch), keep it alive until we are done with it
     this->retain();
     this->unschedule(schedule_selector(NXRTableLayer::onLongPress));
+
+    int closeIndex = -1;
 
     if (m_active >= 0 && m_active < static_cast<int>(m_wins.size())) {
         Win& w = m_wins[m_active];
 
         if (m_grab == Grab::Title) {
             if (!m_moved) {
-                w.collapsed = !w.collapsed;
-                w.body->setVisible(!w.collapsed);
-                w.scroll->setVisible(!w.collapsed);
-                this->drawArrow(w);
-                w.node->setPosition(this->clampTopLeft(w, w.node->getPosition()));
-                this->refreshRows();
+                const auto startLocal = w.node->convertToNodeSpace(m_start);
+                if (w.closable && startLocal.x >= w.width - 42.f && startLocal.x <= w.width - 20.f) {
+                    closeIndex = m_active;
+                } else {
+                    w.collapsed = !w.collapsed;
+                    w.body->setVisible(!w.collapsed);
+                    if (w.scroll && !w.panel()) w.scroll->setVisible(!w.collapsed);
+                    if (w.host) w.host->setVisible(!w.collapsed);
+                    this->drawArrow(w);
+                    w.node->setPosition(this->clampTopLeft(w, w.node->getPosition()));
+                    this->refreshRows();
+                }
             }
             this->savePositions();
         } else if (m_grab == Grab::Body) {
@@ -581,25 +800,38 @@ void NXRTableLayer::ccTouchEnded(CCTouch* touch, CCEvent*) {
             } else if (!m_longPressed && m_row >= 0 && m_row < static_cast<int>(w.rows.size())) {
                 Row& row = w.rows[m_row];
                 const auto cp = w.scroll->m_contentLayer->convertToNodeSpace(touch->getLocation());
-                const bool onCorner = row.onSettings && cp.x > kWinW - 24.f;
+                const bool onCorner = row.onSettings && cp.x > w.width - 26.f;
 
                 if (onCorner) {
                     auto fn = row.onSettings;
+                    m_grab = Grab::None;
+                    m_active = -1;
+                    m_row = -1;
+                    m_moved = false;
                     fn();
+                    this->release();
+                    return;
                 } else if (!row.hackId.empty()) {
                     if (!row.disabled) {
                         if (auto* hack = NXR::Gui::get().findHackByIDGlobal(row.hackId)) hack->toggle();
                         this->refreshRow(row);
                     }
                 } else if (row.onTap) {
-                    // The callback may rebuild this layer, so copy it and touch nothing afterwards
                     auto fn = row.onTap;
+                    m_grab = Grab::None;
+                    m_active = -1;
+                    m_row = -1;
+                    m_moved = false;
                     fn();
-                    if (NXRTableLayer::get() == this && m_active < static_cast<int>(m_wins.size())) this->refreshRows();
+                    if (NXRTableLayer::get() == this) this->refreshRows();
+                    this->release();
+                    return;
                 }
             }
         }
     }
+
+    if (closeIndex >= 0) this->closeWindow(closeIndex);
 
     m_grab = Grab::None;
     m_active = -1;
@@ -608,7 +840,7 @@ void NXRTableLayer::ccTouchEnded(CCTouch* touch, CCEvent*) {
     this->release();
 }
 
-void NXRTableLayer::ccTouchCancelled(CCTouch* touch, CCEvent* event) {
+void NXRTableLayer::ccTouchCancelled(CCTouch*, CCEvent*) {
     this->unschedule(schedule_selector(NXRTableLayer::onLongPress));
     if (m_grab == Grab::Body && m_active >= 0 && m_active < static_cast<int>(m_wins.size())) {
         this->scrollBy(m_wins[m_active], 0.f, true);
@@ -620,16 +852,19 @@ void NXRTableLayer::ccTouchCancelled(CCTouch* touch, CCEvent* event) {
 }
 
 #ifdef GEODE_IS_DESKTOP
-void NXRTableLayer::scrollWheel(float y, float) {
+void NXRTableLayer::scrollWheel(float y, float x) {
+    if (popupBlocking()) return;
     const int index = this->windowAt(geode::cocos::getMousePos());
     if (index < 0) return;
     Win& w = m_wins[index];
     if (w.collapsed) return;
+    if (w.panel()) {
+        if (w.scroll) w.scroll->scrollWheel(y, x);
+        return;
+    }
     this->scrollBy(w, y * kWheelDir, true);
 }
 #endif
-
-// ---------------------------------------------------------------- menu keybind
 
 $execute {
     NXR::Keybinds::get().registerAction("nxr.menu::toggle", "Open Menu", geode::Keybind(cocos2d::KEY_Tab, geode::KeyboardModifier::None), [](bool repeat) {
