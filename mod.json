@@ -1,0 +1,37 @@
+{
+	"geode": "5.10.1",
+	"gd": {
+		"android": "2.2081",
+		"ios": "2.2081"
+	},
+	"id": "noxora.nxr",
+	"name": "NXR",
+	"version": "v1.3.2",
+	"developer": "Noxora",
+	"description": "Feature-rich mobile mod menu with a macro bot, noclip, hitboxes, trajectory and editor tools.",
+	"links": {
+		"source": "https://github.com/noxoraid/NoxoraUtils"
+	},
+	"early-load": true,
+	"tags": [
+		"cheat",
+		"gameplay",
+		"utility",
+		"interface",
+		"offline"
+	],
+	"resources": {
+		"sprites": [
+			"res/*.png"
+		],
+		"files": [
+			"res/click_indicator.mp3"
+		],
+		"fonts": {
+			"GoogleSans": {
+				"path": "res/GoogleSans-Regular.ttf",
+				"size": 80
+			}
+		}
+	}
+}
