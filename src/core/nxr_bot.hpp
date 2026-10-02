@@ -243,6 +243,17 @@ namespace NXR::Bot {
         bool pendingRestart = false;
         bool pendingHere = false;
 
+        // Desync Rescue: deaths that happen in playback on a frame the recording survived
+        uint32_t rescues = 0;
+        uint64_t firstRescueFrame = 0;
+        uint64_t lastRescueFrame = 0;
+
+        void resetRescues() {
+            rescues = 0;
+            firstRescueFrame = 0;
+            lastRescueFrame = 0;
+        }
+
         void resetRun() {
             frame = 0;
             playIndex = 0;
@@ -286,6 +297,7 @@ namespace NXR::Bot {
             indicatorClear();
             current = std::move(macro);
             checkpointFrames.clear();
+            resetRescues();
             resetRun();
         }
 

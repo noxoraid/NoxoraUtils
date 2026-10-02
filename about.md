@@ -1,5 +1,5 @@
 # NXR
-NXR is a glass themed mod menu with four selectable themes for Geometry Dash on Android 64-bit and iOS.
+NXR is a glass themed mod menu with four selectable themes for Geometry Dash on Windows, macOS and Android 64-bit.
 
 ## Features
 
@@ -29,6 +29,12 @@ NXR is a glass themed mod menu with four selectable themes for Geometry Dash on 
 - Show Coin (long lines to every coin, custom color)
 - Startpos Switcher (< N > indicator)
 - Layout Mode
+
+### Menu
+- Two layouts, switch in Settings > Menu Layout: **Panel** (tabs in one popup, default on Android) and **Table** (one draggable, collapsible, scrollable window per tab, default on Windows and macOS). Table works with mouse and touch, tap a row to toggle, tap the corner triangle for its settings, hold a row for its description, mouse wheel scrolls
+- Open Menu keybind (Tab by default) on top of the floating NXR button, you can change it in Settings > Open Menu Key
+- Toggle Style in Settings: **Switch** (slider toggle, the original) or **Checkbox** (check mark, tap once = on, tap again = off). Works in both layouts
+- Table Scale, positions and collapsed state are remembered
 
 ### Settings
 - New Settings tab in the mobile menu

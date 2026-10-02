@@ -1,3 +1,4 @@
+#include "../../core/nxr_ui_mode.hpp"
 #include "../../core/nxr_theme.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PauseLayer.hpp>
@@ -126,7 +127,7 @@ namespace {
             auto cell = CCMenu::create();
             cell->setContentSize({150.f, 28.f});
 
-            auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, 0.65f, [callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
+            auto toggle = NXR::Ui::makeToggler(0.65f, [callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
                 callback(!sender->isOn());
             });
             toggle->setPosition({22.f, 14.f});

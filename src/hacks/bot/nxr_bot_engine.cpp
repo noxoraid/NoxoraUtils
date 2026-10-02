@@ -19,7 +19,7 @@ namespace {
     using namespace NXR::Bot;
     namespace Cap = NXR::Capture;
 
-    constexpr uint32_t kSuperInterval = 60;
+    constexpr uint32_t kSuperInterval = 30;
 
     bool g_inQueue = false;
     bool g_replayInject = false;
@@ -56,6 +56,10 @@ namespace {
 
     bool playbackDeathEnabled() {
         return NXRConfig::get().get<bool>("nxr.bot.playback_death", true);
+    }
+
+    bool rescueEnabled() {
+        return NXRConfig::get().get<bool>("nxr.bot.desync_rescue", true);
     }
 
     bool cbfBypassEnabled() {
@@ -271,14 +275,19 @@ namespace {
         p->flipGravity(want, true);
     }
 
-    // Selisih posisi (unit GD) di bawah ini dianggap "masih sama dengan rekaman".
-    constexpr float kDriftEps = 0.05f;
-    constexpr float kRotEps = 2.f;
+    // Toleransi sangat kecil: koreksi dilakukan SEBELUM selisih sempat membesar jadi hit di spike/gap sempit.
+    // (Dulu 0.05 unit, itu cukup besar untuk wave/ship di level impossible.)
+    constexpr float kDriftEps = 0.002f;
+    constexpr float kVelEps = 0.002f;
+    constexpr float kRotEps = 1.f;
 
-    bool drifted(PlayerObject* p, const NXR::Capture::PlayerState& s) {
+    bool drifted(PlayerObject* p, const NXR::Capture::PlayerState& s, bool full) {
         if (!p || s.x == 0.f || s.y == 0.f) return false;
         const auto pos = p->getPosition();
-        return std::fabs(pos.x - s.x) > kDriftEps || std::fabs(pos.y - s.y) > kDriftEps;
+        if (std::fabs(pos.x - s.x) > kDriftEps || std::fabs(pos.y - s.y) > kDriftEps) return true;
+        // Kecepatan yang melenceng akan jadi selisih posisi di tick berikutnya, tangkap lebih awal.
+        if (full && std::fabs(static_cast<float>(p->m_yVelocity) - s.yVel) > kVelEps) return true;
+        return false;
     }
 
     bool rotationOff(PlayerObject* p, const NXR::Capture::PlayerState& s) {
@@ -313,8 +322,8 @@ namespace {
         }
 
         const bool off = force
-            || drifted(layer->m_player1, row->p1)
-            || (dual && drifted(layer->m_player2, row->p2));
+            || drifted(layer->m_player1, row->p1, row->full)
+            || (dual && drifted(layer->m_player2, row->p2, row->full));
 
         if (off) {
             restoreSuper(layer, m, frame, dual);
@@ -326,6 +335,25 @@ namespace {
         }
 
         applyHold(layer, row->hold, dual);
+    }
+
+    // True kalau kematian di playback pasti akibat desync: rekaman yang dipakai selamat melewati frame ini
+    // (attempt mati tidak pernah disimpan, jadi baris frame ini hanya ada kalau pemain hidup).
+    bool isDesyncDeath(PlayLayer* pl, GameObject* object) {
+        auto& st = State::get();
+        if (st.mode != Mode::Playing || !rescueEnabled()) return false;
+        if (!pl || pl->m_levelEndAnimationStarted) return false;
+        if (object && object == pl->m_anticheatSpike) return false;
+        if (st.current.frames.empty() || st.frame == 0) return false;
+        if (pl->m_player1 && pl->m_player1->m_isDead) return false;
+        return rowFast(st.current, st.frame) != nullptr;
+    }
+
+    void noteRescue() {
+        auto& st = State::get();
+        if (st.rescues == 0) st.firstRescueFrame = st.frame;
+        if (st.lastRescueFrame != st.frame) st.rescues++;
+        st.lastRescueFrame = st.frame;
     }
 
     void addInput(uint64_t frame, bool player2, int button, bool down) {
@@ -721,6 +749,13 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
                 && !st.current.events.empty() && saveOnWinEnabled()) {
                 queueWinBackup();
             }
+            if (ending && !st.levelWasEnding && st.mode == Mode::Playing && st.rescues > 0) {
+                const uint32_t n = st.rescues;
+                const uint64_t first = st.firstRescueFrame;
+                geode::queueInMainThread([n, first] {
+                    geode::Notification::create(fmt::format("Desync Rescue: {} frame(s) fixed, first at frame {}", n, first), geode::NotificationIcon::Warning)->show();
+                });
+            }
             st.levelWasEnding = ending;
         }
 
@@ -737,7 +772,7 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
                     recordRow(this, st.frame, false);
                 }
             } else if (st.mode == Mode::Playing) {
-                applyPlayback(this, st.frame);
+                applyPlayback(this, st.frame, st.lastRescueFrame == st.frame && st.rescues > 0);
                 indicatorUpdate();
             }
         }
@@ -752,7 +787,14 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
 
 class $modify(NXRBotPlayLayer, PlayLayer) {
     void destroyPlayer(PlayerObject* player, GameObject* object) {
-        if (State::get().mode == Mode::Playing && !m_levelEndAnimationStarted && !playbackDeathEnabled()) return;
+        if (State::get().mode == Mode::Playing && !m_levelEndAnimationStarted) {
+            if (!playbackDeathEnabled()) return;
+            if (isDesyncDeath(this, object)) {
+                // Jangan mati: pemain di-snap ke state rekaman lewat applyPlayback() di akhir tick ini.
+                noteRescue();
+                return;
+            }
+        }
         PlayLayer::destroyPlayer(player, object);
     }
 
@@ -814,6 +856,8 @@ class $modify(NXRBotPlayLayer, PlayLayer) {
         }
 
         int holdAtCheckpoint = -1;
+
+        if (st.mode == Mode::Playing && newFrame == 0) st.resetRescues();
 
         if (st.mode != Mode::Off) {
             onReset(newFrame);

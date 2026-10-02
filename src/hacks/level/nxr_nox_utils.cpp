@@ -1,3 +1,4 @@
+#include "../../core/nxr_ui_mode.hpp"
 #include <Geode/Geode.hpp>
 #include <Geode/binding/PlayerButtonCommand.hpp>
 #include <Geode/modify/GJBaseGameLayer.hpp>
@@ -214,8 +215,7 @@ namespace {
     void addBoundRow(NXRHackSettingsPopup* popup, const std::string& label, bool initial, std::function<void(bool)> setter) {
         popup->prepareNewRow();
 
-        auto toggle = CCMenuItemExt::createTogglerWithFilename(
-            "NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, 0.8f,
+        auto toggle = NXR::Ui::makeToggler(0.8f,
             [setter = std::move(setter)](CCMenuItemToggler* sender) {
                 setter(!sender->isOn());
             }

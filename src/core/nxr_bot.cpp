@@ -300,7 +300,11 @@ std::string NXR::Bot::backupNameNow(const std::string& reason) {
     const auto now = std::chrono::system_clock::now();
     const std::time_t t = std::chrono::system_clock::to_time_t(now);
     std::tm tm{};
+#ifdef GEODE_IS_WINDOWS
+    localtime_s(&tm, &t);
+#else
     localtime_r(&t, &tm);
+#endif
     char buf[32];
     std::strftime(buf, sizeof(buf), "%Y%m%d_%H%M%S", &tm);
     return std::string("_backup_") + buf + "_" + reason;

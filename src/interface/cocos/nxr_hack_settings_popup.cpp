@@ -1,3 +1,4 @@
+#include "../../core/nxr_ui_mode.hpp"
 #include "../../core/nxr_theme.hpp"
 #include "nxr_menu.hpp"
 #include <Geode/ui/Scrollbar.hpp>
@@ -92,7 +93,7 @@ void NXRHackSettingsPopup::addConfigToggle(const std::string& labelText, const s
     auto& config = NXRConfig::get();
     prepareNewRow();
 
-    auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, 0.8f, [key, callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
+    auto toggle = NXR::Ui::makeToggler(0.8f, [key, callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
         bool newValue = !sender->isOn();
         NXRConfig::get().set<bool>(key, newValue);
         if (callback) {

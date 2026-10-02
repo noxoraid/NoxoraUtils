@@ -135,7 +135,7 @@ void NXROverlayButton::registerWithTouchDispatcher() {
     CCTouchDispatcher::get()->addTargetedDelegate(this, -1000, true);
 }
 
-#include "nxr_hacks_layer.hpp"
+#include "../../core/nxr_ui_mode.hpp"
 
 static bool inited = false;
 class $modify(NXRCocosInitMenuLayer, MenuLayer) {
@@ -146,7 +146,7 @@ class $modify(NXRCocosInitMenuLayer, MenuLayer) {
             auto button = NXROverlayButton::get();
             button->setID("nxr.toggle.ui"_spr);
             button->setCallback([]() {
-                NXRHacksLayer::isOpened() ? NXRHacksLayer::get()->onClose(nullptr) : NXRHacksLayer::get()->show();
+                NXR::Ui::toggleMenu();
             });
             OverlayManager::get()->addChild(button);
         }

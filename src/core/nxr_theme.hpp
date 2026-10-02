@@ -19,6 +19,16 @@ namespace NXR::Theme {
         return std::clamp(NXRConfig::get().get<int>(kKey, Normal), static_cast<int>(Basic), static_cast<int>(Pro));
     }
 
+    // Title bar colour of the Table layout, matched to each theme
+    inline ccColor3B accent() {
+        switch (current()) {
+            case Basic: return {120, 120, 120};
+            case Medium: return {58, 100, 180};
+            case Pro: return {140, 56, 190};
+            default: return {96, 112, 150};
+        }
+    }
+
     inline const char* square() {
         switch (current()) {
             case Basic: return "NXR_square_basic.png"_spr;

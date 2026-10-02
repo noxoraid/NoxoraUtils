@@ -20,6 +20,7 @@ namespace {
     constexpr const char* kFixRandomKey = "nxr.bot.fix_random";
     constexpr const char* kCbfKey = "nxr.bot.cbf_bypass";
     constexpr const char* kPlaybackDeathKey = "nxr.bot.playback_death";
+    constexpr const char* kDesyncRescueKey = "nxr.bot.desync_rescue";
     constexpr const char* kIndLineKey = "nxr.bot.click_indicator::line_color";
     constexpr const char* kIndBodyKey = "nxr.bot.click_indicator::body_color";
     constexpr const char* kIndBodyOpacityKey = "nxr.bot.click_indicator::body_opacity";
@@ -258,6 +259,7 @@ namespace {
         if (!st.current.events.empty() && std::abs(st.current.tps - effectiveTps()) > 0.5f) {
             text += fmt::format(" | Replay TPS {:.0f}", st.current.tps);
         }
+        if (st.mode == Mode::Playing && st.rescues > 0) text += fmt::format(" | Rescue {}", st.rescues);
         return text;
     }
 
@@ -480,6 +482,7 @@ $execute {
         popup->addConfigToggle("Fix Random", kFixRandomKey, true);
         popup->addConfigToggle("CBF Bypass", kCbfKey, true);
         popup->addConfigToggle("Playback Death", kPlaybackDeathKey, true);
+        popup->addConfigToggle("Desync Rescue", kDesyncRescueKey, true);
         popup->addConfigToggle("Wave Trail Fix", "nxr.bot.wave_trail_fix", true);
     });
 

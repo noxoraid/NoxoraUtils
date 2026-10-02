@@ -1,6 +1,3 @@
-// EditorUI::zoomGameLayer is an inline function on iOS (GD 2.2081), so Geode
-// cannot hook it. The hack is only compiled where the hook is possible.
-#ifndef GEODE_IS_IOS
 #include <Geode/Geode.hpp>
 #include <Geode/modify/EditorUI.hpp>
 #include "../../core/nxr_gui.hpp"
@@ -30,4 +27,3 @@ class $modify(NXRZoomBypassEditorUI, EditorUI) {
         zoomBypass(zoomingIn);
     }
 };
-#endif // GEODE_IS_IOS

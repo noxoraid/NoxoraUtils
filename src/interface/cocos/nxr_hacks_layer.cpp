@@ -5,6 +5,70 @@
 #include "../../core/nxr_config.hpp"
 #include "../../core/nxr_gui.hpp"
 #include "nxr_text_style.hpp"
+#include "../../core/nxr_ui_mode.hpp"
+#include "../../core/nxr_keybinds.hpp"
+
+namespace {
+    constexpr const char* kOpenMenuBind = "nxr.menu::toggle";
+}
+
+void nxrBuildSettingsTab(NXRHacksTab* tab) {
+    tab->addPadding(4.f);
+    tab->addText("Menu Layout", 0.6f);
+    tab->addRadioRow({"Panel", "Table"},
+        [] { return NXR::Ui::layout(); },
+        [](int index) {
+            NXRConfig::get().set<int>(NXR::Ui::kLayoutKey, index);
+            geode::queueInMainThread([] { NXR::Ui::reopenMenu(); });
+            return index;
+        });
+    tab->addText("Panel: tabs in one popup. Table: draggable windows", 0.42f);
+    tab->addSeparator();
+    tab->addText("Open Menu Key", 0.6f);
+    tab->addKeybindRow("Open Menu",
+        [] {
+            auto& keybinds = NXR::Keybinds::get();
+            if (keybinds.isRecordingCustom(kOpenMenuBind)) return std::string("Press a key...");
+            const auto bind = keybinds.getBind(kOpenMenuBind);
+            return bind.key == cocos2d::KEY_None ? std::string("None") : bind.toString();
+        },
+        [] { NXR::Keybinds::get().startRecordingCustom(kOpenMenuBind); },
+        [] {
+            NXR::Keybinds::get().stopRecording();
+            NXR::Keybinds::get().clearCustomBind(kOpenMenuBind);
+        });
+    tab->addText("Tap the key button, then press a key. Esc or Clear removes it", 0.42f);
+    tab->addSeparator();
+    tab->addText("Toggle Style", 0.6f);
+    tab->addRadioRow({"Switch", "Checkbox"},
+        [] { return NXR::Ui::toggleStyle(); },
+        [](int index) {
+            NXRConfig::get().set<int>(NXR::Ui::kToggleStyleKey, index);
+            geode::queueInMainThread([] { NXR::Ui::reopenMenu(); });
+            return index;
+        });
+    tab->addText("Switch: slider toggle. Checkbox: tap once = on, tap again = off", 0.42f);
+    tab->addSeparator();
+    tab->addText("Theme", 0.6f);
+    tab->addRadioRow({"Basic", "Normal", "Medium", "Pro"},
+        [] { return NXR::Theme::current() - 1; },
+        [](int index) {
+            NXRConfig::get().set<int>(NXR::Theme::kKey, index + 1);
+            return index;
+        });
+    tab->addSeparator();
+    tab->addText("Font", 0.6f);
+    tab->addConfigFloatInput("Font Size (0.6 - 1.6)", NXR::Ui::kFontScaleKey, 1.f, 0.6f, 1.6f);
+    tab->addConfigToggle("Custom Font Color", NXR::Ui::kFontColorOnKey, true);
+    tab->addConfigColor3Hex("Font Color", NXR::Ui::kFontColorKey, "FFFFFF");
+    tab->addSeparator();
+    tab->addText("Table Layout", 0.6f);
+    tab->addConfigFloatInput("Table Scale (0.6 - 1.6)", NXR::Ui::kTableScaleKey, 1.f, 0.6f, 1.6f);
+    tab->addSeparator();
+    tab->addConfigButton("Apply (reopen menu)", [] { NXR::Ui::reopenMenu(); });
+    tab->addText("Changes show after the menu is reopened", 0.42f);
+    tab->addPadding(4.f);
+}
 
 NXRHacksLayer* NXRHacksLayer::instance = nullptr;
 
@@ -114,28 +178,7 @@ bool NXRHacksLayer::init() {
         tab->setID(fmt::format("{}"_spr, "Settings"));
         m_mainLayer->addChild(tab);
 
-        tab->addPadding(4.f);
-        tab->addText("Theme", 0.6f);
-        tab->addRadioRow({"Basic", "Normal", "Medium", "Pro"},
-            [] { return NXR::Theme::current() - 1; },
-            [](int index) {
-                NXRConfig::get().set<int>(NXR::Theme::kKey, index + 1);
-                return index;
-            });
-        tab->addSeparator();
-        tab->addText("Font", 0.6f);
-        tab->addConfigFloatInput("Font Size (0.6 - 1.6)", NXR::Ui::kFontScaleKey, 1.f, 0.6f, 1.6f);
-        tab->addConfigToggle("Custom Font Color", NXR::Ui::kFontColorOnKey, true);
-        tab->addConfigColor3Hex("Font Color", NXR::Ui::kFontColorKey, "FFFFFF");
-        tab->addSeparator();
-        tab->addConfigButton("Apply (reopen menu)", [] {
-            if (auto* layer = NXRHacksLayer::get()) {
-                layer->onClose(nullptr);
-                geode::queueInMainThread([] { NXRHacksLayer::get()->show(); });
-            }
-        });
-        tab->addText("Changes show after the menu is reopened", 0.42f);
-        tab->addPadding(4.f);
+        nxrBuildSettingsTab(tab);
 
         tab->m_scrollLayer->m_contentLayer->updateLayout();
         if (settingsIndex == m_index && m_lastIndexScroll != -1)

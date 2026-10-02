@@ -1,3 +1,21 @@
+# v1.4.1
+
+- **Settings:** new **Open Menu Key**. Tap the key button, press a key, and that key opens and closes the menu on Windows and macOS (Tab by default). Esc or Clear removes it. It is saved and does not come back after a restart.
+- **Settings:** new **Toggle Style** with two modes: **Switch** (the slider toggle that was already there) and **Checkbox** (a check mark box, tap once = on, tap again = off). It applies to every toggle in the menu, in both Panel and Table layouts. The menu reopens by itself when you change it.
+- **Table:** hacks show a check mark box when Toggle Style is Checkbox. The Table Settings window has rows for Layout, Theme, UI Scale, Toggle Style and Reset Window Positions.
+
+# v1.4.0
+
+- **Platforms:** NXR now builds for **Windows, macOS and Android 64-bit**. iOS support was removed, CI builds the three platforms.
+- **UI:** new **Table** menu layout, draggable and collapsible windows, one per tab, drawn with cocos2d only so it works the same with mouse and touch. Switch between **Panel** and **Table** in Settings > Menu Layout (Table is the default on desktop, Panel on Android). Table scale, window positions and collapsed state are saved. Tabs with their own controls (Bot, Settings) open them from a row at the top of their window.
+- **Keybinds:** new Open Menu action (Tab by default).
+
+# v1.3.3
+
+- **Bot:** new **Desync Rescue** toggle (on by default). If playback would die on a frame the recording survived, that death is a desync by definition, so the player is not killed and is snapped back to the recorded state of that frame. A "Rescue N" counter shows in the Bot tab and a notification at level end lists how many frames were fixed and the first one.
+- **Bot:** playback correction tolerance lowered from 0.05 to 0.002 units and Y velocity is now checked too, so drift is fixed before it reaches a tight gap or spike.
+- **Bot:** full-state super frames are now stored every 30 frames (was 60) for a more complete resync. Macro files are a bit bigger.
+
 # v1.3.2
 
 - **Replay Info:** the info popup now shows Mode (Platformer or Normal), total jumps, left/right inputs, max and average CPS, longest and shortest hold, spam taps, and level stats: total objects, orbs, pads, all portals, gravity, gamemode, speed, size, mirror and dual portals, hazards, coins, triggers and start positions. Level stats are stored inside the macro file itself (new NXR9 format, older NXR8 and NXR7 macros still load) and are also written to the JSON export. Macros saved before this version and imports show N/A for them until they are saved again with the level open.

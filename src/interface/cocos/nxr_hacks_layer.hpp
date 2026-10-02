@@ -2,6 +2,9 @@
 #include <Geode/Geode.hpp>
 #include "nxr_hacks_tab.hpp"
 
+// Builds the Settings tab content (layout, theme, font). Shared by the Panel layout and the Table layout popup.
+void nxrBuildSettingsTab(NXRHacksTab* tab);
+
 class NXRHacksLayer : public geode::Popup {
 private:
     bool init();

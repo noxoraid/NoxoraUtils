@@ -1,15 +1,12 @@
 cmake_minimum_required(VERSION 3.21)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if ("${CMAKE_SYSTEM_NAME}" STREQUAL "iOS" OR IOS)
-    set(CMAKE_OSX_ARCHITECTURES "arm64")
-endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(NXR VERSION 1.3.2)
+project(NXR VERSION 1.4.1)
 
-if (NOT ANDROID AND NOT IOS AND NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "iOS")
-    message(FATAL_ERROR "NXR supports only Android64 and iOS")
+if (IOS OR "${CMAKE_SYSTEM_NAME}" STREQUAL "iOS")
+    message(FATAL_ERROR "NXR does not support iOS. Supported: Windows, macOS and Android 64-bit")
 endif()
 
 if (ANDROID AND NOT ANDROID_ABI STREQUAL "arm64-v8a")

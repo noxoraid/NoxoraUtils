@@ -1,3 +1,4 @@
+#include "../../core/nxr_ui_mode.hpp"
 #include "../../core/nxr_theme.hpp"
 #include "nxr_menu.hpp"
 #include <Geode/ui/Scrollbar.hpp>
@@ -53,7 +54,7 @@ void NXRHacksTab::addToggle(NXR::Hack& hck) {
     hackNode->setContentSize({columnWidth, 30.f});
     hackNode->setAnchorPoint({0, 0.5f});
 
-    auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, 0.8f, [&gui, ID](CCMenuItemToggler* sender) {
+    auto toggle = NXR::Ui::makeToggler(0.8f, [&gui, ID](CCMenuItemToggler* sender) {
         auto* hack = gui.findHackByIDGlobal(ID);
         hack->toggle();
     });
@@ -177,7 +178,7 @@ void NXRHacksTab::addHackToggle(const std::string& labelText, const std::string&
     node->setContentSize({columnWidth, 30.f});
     node->setAnchorPoint({0, 0.5f});
 
-    auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, 0.8f, [key, callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
+    auto toggle = NXR::Ui::makeToggler(0.8f, [key, callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
         auto& gui = NXR::Gui::get();
         auto* hack = gui.findHackByIDGlobal(key);
         if (hack != nullptr)
@@ -216,10 +217,7 @@ void NXRHacksTab::addConfigToggle(
     node->setContentSize({columnWidth, 30.f});
     node->setAnchorPoint({0, 0.5f});
 
-    auto toggle = CCMenuItemExt::createTogglerWithFilename(
-        "NXR_togglerOn.png"_spr,
-        "NXR_togglerOff.png"_spr,
-        0.8f,
+    auto toggle = NXR::Ui::makeToggler(0.8f,
         [key, callback = std::move(callback)](CCMenuItemToggler* sender) mutable {
             bool newValue = !sender->isOn();
             NXRConfig::get().set<bool>(key, newValue);
