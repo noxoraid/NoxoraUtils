@@ -361,8 +361,8 @@ class $modify(NXRShowHitboxPlayLayer, PlayLayer) {
     static void onModify(auto& self) {
         auto& hack = NXR::Gui::get().getWindow("Player").findHackByName("Show Hitbox");
 
-        hack.setCustomWindowCocos([](cocos2d::CCNode* node) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(node);
+        hack.setForm([](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigModeToggle(kModeKey, "Normal", "Filled");
             popup->addConfigIntInput("Fill Opacity", kOpacityKey, 0, 255, 60);
             popup->addConfigFloatInput("Line Size", kSizeKey, 0.1f, 10.f, 0.5f);

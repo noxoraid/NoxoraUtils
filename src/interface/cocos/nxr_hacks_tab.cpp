@@ -83,7 +83,7 @@ void NXRHacksTab::addToggle(NXR::Hack& hck) {
     hackNode->addChild(label);
 
     float iconXOffset = label->getPositionX() + label->getScaledContentWidth() + 13.f;
-    if (hck.avaibleCustomWindowCocos()) {
+    if (hck.hasForm()) {
         auto customSettingsBtn = CCSprite::create("NXR_settingsBtn.png"_spr);
         customSettingsBtn->setScale(0.45f);
 
@@ -442,7 +442,7 @@ void NXRHacksTab::addRadioRow(const std::vector<std::string>& labels, geode::Fun
         cell->setAnchorPoint({0, 0.5f});
 
         int index = static_cast<int>(i);
-        auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_tableCheckOn.png"_spr, "NXR_tableCheckOff.png"_spr, 0.35f, [index, togglers, select](CCMenuItemToggler*) {
+        auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_tableCheckOn.png"_spr, "NXR_tableCheckOff.png"_spr, NXR::Ui::kRadioScale, [index, togglers, select](CCMenuItemToggler*) {
             int applied = (*select)(index);
             geode::queueInMainThread([togglers, applied] {
                 for (size_t k = 0; k < togglers->size(); k++) {

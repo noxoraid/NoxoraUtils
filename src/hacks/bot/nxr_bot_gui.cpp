@@ -11,6 +11,8 @@
 #include "../../interface/cocos/nxr_hacks_tab.hpp"
 #include "../../interface/cocos/nxr_hack_settings_popup.hpp"
 #include "../../interface/cocos/nxr_bot_popups.hpp"
+#include "../../interface/imgui/nxr_imgui_menu.hpp"
+#include <imgui.h>
 
 namespace {
     using namespace NXR::Bot;
@@ -466,6 +468,69 @@ public:
 
 namespace {
     NXR::Hack g_botSettings("nxr.bot.settings", "Bot", "", false);
+
+    void pairRow(const std::string& leftLabel, std::function<void()> left, const std::string& rightLabel, std::function<void()> right) {
+        const float width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (NXR::Imgui::button(leftLabel, width)) NXR::Imgui::later(std::move(left));
+        ImGui::SameLine();
+        if (NXR::Imgui::button(rightLabel, width)) NXR::Imgui::later(std::move(right));
+    }
+
+    void drawBotPanel() {
+        updateRates(ImGui::GetIO().DeltaTime);
+
+        const int mode = currentMode();
+        const int pickedMode = NXR::Imgui::choice({"Disabled", "Record", "Playback"}, mode, 3);
+        if (pickedMode >= 0 && pickedMode != mode) NXR::Imgui::later([pickedMode] { selectMode(pickedMode); });
+
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Replays");
+        if (NXR::Imgui::button(replayLabel(), -1.f)) {
+            NXR::Imgui::later([] {
+                NXR::Ui::showPopup(NXRReplayPickerPopup::create("Select Replay", "Select", [](const std::string& name) {
+                    State::get().selectedReplay = name;
+                }, true), "Select Replay");
+            });
+        }
+        if (NXR::Imgui::button("Settings", -1.f)) {
+            NXR::Imgui::later([] { NXRHackSettingsPopup::open(g_botSettings, "panel:Bot"); });
+        }
+
+        ImGui::Spacing();
+        ImGui::TextUnformatted("Bot Type");
+        const int type = std::clamp(NXRConfig::get().get<int>("nxr.bot.type", 1), 1, 3) - 1;
+        const int pickedType = NXR::Imgui::choice({"Auto", "Hold", "Click"}, type, 3);
+        if (pickedType >= 0 && pickedType != type) {
+            NXRConfig::get().set<int>("nxr.bot.type", pickedType + 1);
+            State::get().clickCredits = 0;
+        }
+
+        auto& form = NXR::Imgui::form();
+        form.addConfigToggle("Also Save As JSON", kSaveJsonKey, false);
+        form.addConfigFloatInput("Speed (0.1 - 10000)", kSpeedKey, 0.1f, 10000.f, kDefaultSpeed);
+        form.addConfigFloatInput("Frame Step (0.1 - 10)", "nxr.bot.frame_step", 0.1f, 10.f, 1.f);
+
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", infoText().c_str());
+        ImGui::TextWrapped("%s", rateText().c_str());
+        ImGui::Spacing();
+
+        pairRow("New", [] {
+            NXR::Ui::showPopup(NXRNamePopup::create("New Replay", [](const std::string& name) { createReplay(name); }), "New Replay");
+        }, "Save", [] { saveReplay(); });
+
+        pairRow("Load", [] {
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); }), "Load Replay");
+        }, "Delete", [] {
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); }), "Delete Replay");
+        });
+
+        pairRow("Restore Autosave", [] { restoreAutosave(); }, "Browse Replays", [] { openBrowser(); });
+
+        pairRow("Merge Replays", [] { startMergeFlow(); }, "Export JSON", [] {
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
+        });
+    }
 }
 
 $execute {
@@ -473,8 +538,8 @@ $execute {
 
     auto& win = NXR::Gui::get().getWindow("Bot");
 
-    g_botSettings.setCustomWindowCocos([](cocos2d::CCNode* node) {
-        auto* popup = static_cast<NXRHackSettingsPopup*>(node);
+    g_botSettings.setForm([](NXR::Form& form) {
+        auto* popup = &form;
         popup->addConfigToggle("Record Without Restart", kRecordHereKey, false);
         popup->addConfigToggle("Ignore Inputs", kIgnoreKey, true, [](bool value) { State::get().ignoreInput = value; });
         popup->addConfigToggle("Practice Fixes", kPracticeFixKey, true);
@@ -497,8 +562,8 @@ $execute {
         if (neverSet) config.set<bool>(kAutosaveKey, true);
     }
 
-    indicator.setCustomWindowCocos([](cocos2d::CCNode* node) {
-        auto* popup = static_cast<NXRHackSettingsPopup*>(node);
+    indicator.setForm([](NXR::Form& form) {
+        auto* popup = &form;
         popup->addConfigRadio("Effect", kIndEffectKey, {{"Zone Follow", 1}, {"Line", 2}}, 1);
         popup->addSeparator();
         popup->addConfigToggle("Mirror (Left Ramp)", kIndHudKey, true);
@@ -528,12 +593,14 @@ $execute {
         popup->addConfigIntInput("Sound Volume", kIndSoundVolumeKey, 0, 100, 80);
     });
 
-    autosave.setCustomWindowCocos([](cocos2d::CCNode* node) {
-        auto* popup = static_cast<NXRHackSettingsPopup*>(node);
+    autosave.setForm([](NXR::Form& form) {
+        auto* popup = &form;
         popup->addConfigToggle("Save On Win", kAutosaveWinKey, true);
         popup->addConfigIntInput("Save Every (s)", kAutosaveSecondsKey, 5, 600, 20);
         popup->addConfigIntInput("Keep Backups", kAutosaveKeepKey, 1, 100, 10);
     });
+
+    win.setImguiPanel(drawBotPanel);
 
     win.setCustomWindowCocos([](cocos2d::CCNode* node) {
         auto* tab = static_cast<NXRHacksTab*>(node);

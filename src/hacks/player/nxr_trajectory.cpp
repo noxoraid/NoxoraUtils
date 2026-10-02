@@ -331,14 +331,14 @@ class $modify(NXRTrajectoryPlayLayer, PlayLayer) {
         NXR::tryAddHook(self, hack, "PlayLayer::destroyPlayer");
         NXR::tryAddHook(self, hack, "PlayLayer::playEndAnimationToPos");
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             holdColor = hack.formatAdditionalSetting("hold_color"),
             releaseColor = hack.formatAdditionalSetting("release_color"),
             length = hack.formatAdditionalSetting("length"),
             thickness = hack.formatAdditionalSetting("thickness"),
             interval = hack.formatAdditionalSetting("interval")
-        ](cocos2d::CCNode* node) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(node);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigColor3Hex("Hold Color", holdColor, "39FF6E");
             popup->addConfigColor3Hex("Release Color", releaseColor, "FF3B3B");
             popup->addConfigIntInput("Length (steps)", length, 30, 480, 180);

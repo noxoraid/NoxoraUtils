@@ -67,11 +67,11 @@ class $modify(NXRAutoCoinBaseGameLayer, GJBaseGameLayer) {
             }
         });
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             p1 = hack.formatAdditionalSetting("p1"),
             p2 = hack.formatAdditionalSetting("p2")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigToggle("Player 1", p1, true);
             popup->addConfigToggle("Player 2", p2, true);
         });

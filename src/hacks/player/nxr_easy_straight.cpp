@@ -104,8 +104,8 @@ class $modify(NXREasyStraightPlayerObject, PlayerObject) {
         NXR::tryAddHook(self, hack, "PlayerObject::pushButton");
         NXR::tryAddHook(self, hack, "PlayerObject::releaseButton");
 
-        hack.setCustomWindowCocos([](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        hack.setForm([](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigToggle("Ship", kShipKey, true);
             popup->addConfigToggle("Wave", kWaveKey, true);
             popup->addSeparator();

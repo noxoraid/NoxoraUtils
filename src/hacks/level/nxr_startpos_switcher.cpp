@@ -253,12 +253,12 @@ class $modify(NXRStartposSwitcherPlayLayer, PlayLayer) {
             if (auto* layer = PlayLayer::get()) install(layer);
         });
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             minOpacityKey = hack.formatAdditionalSetting("min_opacity"),
             maxOpacityKey = hack.formatAdditionalSetting("max_opacity"),
             cameraKey = hack.formatAdditionalSetting("reset_camera")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigToggle("Reset Camera", cameraKey, false);
             popup->addConfigIntInput("Min Opacity (0 - 255)", minOpacityKey, 0, 255, 100);
             popup->addConfigIntInput("Max Opacity (0 - 255)", maxOpacityKey, 0, 255, 200);

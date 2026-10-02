@@ -25,7 +25,14 @@ endif()
 
 add_subdirectory($ENV{GEODE_SDK} ${CMAKE_CURRENT_BINARY_DIR}/geode)
 
+if (NOT COMMAND CPMAddPackage)
+    include($ENV{GEODE_SDK}/cmake/CPM.cmake)
+endif()
+
+CPMAddPackage("gh:matcool/gd-imgui-cocos#main")
+
 target_include_directories(${PROJECT_NAME} PRIVATE libs)
+target_link_libraries(${PROJECT_NAME} imgui-cocos)
 
 if (ANDROID)
     target_link_options(${PROJECT_NAME} PRIVATE "-Wl,-Bsymbolic")

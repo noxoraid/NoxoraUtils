@@ -12,15 +12,32 @@ namespace NXR::Ui {
 
     inline constexpr const char* kLayoutKey = "nxr.ui.layout";
     inline constexpr const char* kTableScaleKey = "nxr.ui.table_scale";
+    inline constexpr const char* kToggleStyleKey = "nxr.ui.toggle_style";
+
+    inline constexpr float kSwitchScale = 1.f;
+    inline constexpr float kCheckScale = 1.5f;
+    inline constexpr float kRadioScale = 1.2f;
 
     enum Layout : int {
         Panel = 0,
         Table = 1,
     };
 
+    enum ToggleStyle : int {
+        Switch = 0,
+        Check = 1,
+    };
+
+    inline int toggleStyle() {
+        return std::clamp(NXRConfig::get().get<int>(kToggleStyleKey, Switch), static_cast<int>(Switch), static_cast<int>(Check));
+    }
+
     template <class Callback>
     inline CCMenuItemToggler* makeToggler(float scale, Callback&& callback) {
-        return CCMenuItemExt::createTogglerWithFilename("NXR_tableCheckOn.png"_spr, "NXR_tableCheckOff.png"_spr, scale * 0.5f, std::forward<Callback>(callback));
+        if (toggleStyle() == Check) {
+            return CCMenuItemExt::createTogglerWithFilename("NXR_tableCheckOn.png"_spr, "NXR_tableCheckOff.png"_spr, scale * kCheckScale, std::forward<Callback>(callback));
+        }
+        return CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, scale * kSwitchScale, std::forward<Callback>(callback));
     }
 
     inline int defaultLayout() {

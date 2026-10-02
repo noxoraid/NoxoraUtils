@@ -106,11 +106,11 @@ class $modify(NXRFpsLimiterCCDirector, cocos2d::CCDirector) {
             geode::queueInMainThread([] { applyFrameRate(); });
         });
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             fpsKey = hack.formatAdditionalSetting("fps"),
             tpsKey = hack.formatAdditionalSetting("tps")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigIntInput("Target FPS (0 = uncapped)", fpsKey, 0, 5000000, 240, [](int) {
                 applyFrameRate();
             });

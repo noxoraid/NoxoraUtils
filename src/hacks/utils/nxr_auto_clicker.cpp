@@ -113,7 +113,7 @@ class $modify(NXRAutoClickerBaseGameLayer, GJBaseGameLayer) {
         NXR::trySetPriority(self, "GJBaseGameLayer::processCommands", -10);
         NXR::tryAddHook(self, hack, "GJBaseGameLayer::processCommands");
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             mode = hack.formatAdditionalSetting("mode"),
             p1 = hack.formatAdditionalSetting("p1"),
             p1Hold = hack.formatAdditionalSetting("p1_hold"),
@@ -126,13 +126,9 @@ class $modify(NXRAutoClickerBaseGameLayer, GJBaseGameLayer) {
             p1Angle = hack.formatAdditionalSetting("p1_angle"),
             p2Angle = hack.formatAdditionalSetting("p2_angle"),
             onlyHold = hack.formatAdditionalSetting("only_hold")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
-            popup->addConfigSelect("Mode", mode, {{"Normal", 1}, {"Super", 2}, {"Angle", 3}}, 1, [weak = geode::WeakRef(popup)](int) {
-                geode::queueInMainThread([weak] {
-                    if (auto popup = weak.lock()) popup->rebuild();
-                });
-            });
+        ](NXR::Form& form) {
+            auto* popup = &form;
+            popup->addConfigSelect("Mode", mode, {{"Normal", 1}, {"Super", 2}, {"Angle", 3}}, 1, [popup](int) { popup->requestRebuild(); });
             popup->addConfigToggle("Only While Holding", onlyHold, false);
             popup->addSeparator();
 

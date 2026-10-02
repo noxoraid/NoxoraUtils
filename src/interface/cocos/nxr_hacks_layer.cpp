@@ -22,7 +22,7 @@ void nxrBuildSettingsTab(NXRHacksTab* tab) {
             geode::queueInMainThread([] { NXR::Ui::reopenMenu(); });
             return index;
         });
-    tab->addText("Panel: tabs in one popup. Table: draggable windows", 0.42f);
+    tab->addText("Panel: tabs in one popup. Table: draggable ImGui windows", 0.42f);
     tab->addSeparator();
     tab->addText("Open Menu Key", 0.6f);
     tab->addKeybindRow("Open Menu",
@@ -47,12 +47,22 @@ void nxrBuildSettingsTab(NXRHacksTab* tab) {
             return index;
         });
     tab->addSeparator();
+    tab->addText("Toggle Style", 0.6f);
+    tab->addRadioRow({"Switch", "Check"},
+        [] { return NXR::Ui::toggleStyle(); },
+        [](int index) {
+            NXRConfig::get().set<int>(NXR::Ui::kToggleStyleKey, index);
+            geode::queueInMainThread([] { NXR::Ui::reopenMenu(); });
+            return index;
+        });
+    tab->addText("Switch: slider toggle. Check: checkbox on every toggle", 0.42f);
+    tab->addSeparator();
     tab->addText("Font", 0.6f);
     tab->addConfigFloatInput("Font Size (0.6 - 1.6)", NXR::Ui::kFontScaleKey, 1.f, 0.6f, 1.6f);
     tab->addConfigToggle("Custom Font Color", NXR::Ui::kFontColorOnKey, true);
     tab->addConfigColor3Hex("Font Color", NXR::Ui::kFontColorKey, "FFFFFF");
     tab->addSeparator();
-    tab->addText("Table Layout", 0.6f);
+    tab->addText("Table Layout (ImGui)", 0.6f);
     tab->addConfigFloatInput("Table Scale (0.6 - 1.6)", NXR::Ui::kTableScaleKey, 1.f, 0.6f, 1.6f);
     tab->addSeparator();
     tab->addConfigButton("Apply (reopen menu)", [] { NXR::Ui::reopenMenu(); });

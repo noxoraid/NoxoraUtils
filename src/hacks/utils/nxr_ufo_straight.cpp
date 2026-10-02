@@ -128,7 +128,7 @@ class $modify(NXRUfoStraightPlayerObject, PlayerObject) {
         NXR::tryAddHook(self, hack, "PlayerObject::pushButton");
         NXR::tryAddHook(self, hack, "PlayerObject::releaseButton");
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             mode = hack.formatAdditionalSetting("mode"),
             rate = hack.formatAdditionalSetting("auto_rate"),
             grace = hack.formatAdditionalSetting("grace"),
@@ -140,8 +140,8 @@ class $modify(NXRUfoStraightPlayerObject, PlayerObject) {
             frames = hack.formatAdditionalSetting("hold_frames"),
             p1 = hack.formatAdditionalSetting("p1"),
             p2 = hack.formatAdditionalSetting("p2")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigModeToggle(mode, "Manual", "Auto");
             popup->addConfigIntInput("Auto Click Rate", rate, 1, 30, 2);
             popup->addConfigIntInput("Manual Grace Frames", grace, 0, 60, 6);

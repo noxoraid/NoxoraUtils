@@ -212,45 +212,30 @@ namespace {
         queueTap(layer, player->m_isSecondPlayer);
     }
 
-    void addBoundRow(NXRHackSettingsPopup* popup, const std::string& label, bool initial, std::function<void(bool)> setter) {
-        popup->prepareNewRow();
-
-        auto toggle = NXR::Ui::makeToggler(0.8f,
-            [setter = std::move(setter)](CCMenuItemToggler* sender) {
-                setter(!sender->isOn());
-            }
-        );
-        toggle->toggle(initial);
-        popup->m_currentRow->addChild(toggle);
-
-        auto text = geode::Label::create(label, "GoogleSans.fnt"_spr);
-        text->setScale(0.55f);
-        if (text->getScaledContentSize().width > 160.f) text->setScale(160.f / text->getContentSize().width);
-        popup->m_currentRow->addChild(text);
-
-        popup->m_currentRow->updateLayout();
+    void addBoundRow(NXR::Form* popup, const std::string& label, bool initial, std::function<void(bool)> setter) {
+        popup->addBoundToggle(label, initial, std::move(setter));
     }
 
-    void addFlagRow(NXRHackSettingsPopup* popup, const char* key) {
+    void addFlagRow(NXR::Form* popup, const char* key) {
         const Flag* flag = findFlag(key);
         if (!flag) return;
         addBoundRow(popup, flag->label, opts().*(flag->member), [flag](bool value) { setFlag(*flag, value); });
     }
 
-    void addHackRow(NXRHackSettingsPopup* popup, const char* label, const char* window, const char* name) {
+    void addHackRow(NXR::Form* popup, const char* label, const char* window, const char* name) {
         addBoundRow(popup, label, hackOf(window, name).getEnabled(), [window, name](bool value) {
             hackOf(window, name).setEnabled(value);
         });
     }
 
-    void addHackSettingRow(NXRHackSettingsPopup* popup, const char* label, const char* window, const char* name, const char* setting, bool fallback) {
+    void addHackSettingRow(NXR::Form* popup, const char* label, const char* window, const char* name, const char* setting, bool fallback) {
         const std::string key = hackOf(window, name).formatAdditionalSetting(setting);
         addBoundRow(popup, label, NXRConfig::get().get<bool>(key, fallback), [key](bool value) {
             NXRConfig::get().set<bool>(key, value);
         });
     }
 
-    void addAutoClickerRow(NXRHackSettingsPopup* popup, const char* label, bool second) {
+    void addAutoClickerRow(NXR::Form* popup, const char* label, bool second) {
         auto& hack = hackOf("Utils", "Auto Clicker");
         const bool initial = hack.getEnabled()
             && NXRConfig::get().get<bool>(hack.formatAdditionalSetting(second ? "p2" : "p1"), !second);
@@ -266,7 +251,7 @@ namespace {
         });
     }
 
-    void buildAutoClickerCocos(NXRHackSettingsPopup* popup) {
+    void buildAutoClickerForm(NXR::Form* popup) {
         auto& hack = hackOf("Utils", "Auto Clicker");
         const std::string mode = hack.formatAdditionalSetting("mode");
         const std::string p1Hold = hack.formatAdditionalSetting("p1_hold");
@@ -280,11 +265,7 @@ namespace {
         addAutoClickerRow(popup, "Auto Clicker P1", false);
         addAutoClickerRow(popup, "Auto Clicker P2", true);
 
-        popup->addConfigModeToggle(mode, "Normal", "Super", 1, [weak = geode::WeakRef(popup)](int) {
-            geode::queueInMainThread([weak] {
-                if (auto popup = weak.lock()) popup->rebuild();
-            });
-        });
+        popup->addConfigModeToggle(mode, "Normal", "Super", 1, [popup](int) { popup->requestRebuild(); });
 
         if (NXRConfig::get().get<int>(mode, 1) == 2) {
             popup->addConfigIntInput("P1 CPS", p1Cps, 1, 5000000, 240);
@@ -298,8 +279,8 @@ namespace {
         popup->addConfigToggle("Only While Holding", onlyHold, false);
     }
 
-    void buildCocosPanel(CCNode* node) {
-        auto* popup = static_cast<NXRHackSettingsPopup*>(node);
+    void buildForm(NXR::Form& form) {
+        auto* popup = &form;
 
         addFlagRow(popup, "flip_death");
         addFlagRow(popup, "flip_p1");
@@ -320,7 +301,7 @@ namespace {
         addHackRow(popup, "Auto Straight Ufo", "Utils", "UFO Straight");
         popup->addSeparator();
 
-        buildAutoClickerCocos(popup);
+        buildAutoClickerForm(popup);
         popup->addSeparator();
 
         addHackRow(popup, "Noclip", "Player", "Noclip");
@@ -352,7 +333,7 @@ $execute {
     hack.setHandler([](bool state) {
         if (!state) clearPrimary();
     });
-    hack.setCustomWindowCocos(buildCocosPanel);
+    hack.setForm(buildForm);
 }
 
 class $modify(NXRNoxUtilsBaseGameLayer, GJBaseGameLayer) {

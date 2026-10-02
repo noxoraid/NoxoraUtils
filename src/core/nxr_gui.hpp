@@ -24,6 +24,12 @@ namespace NXR {
 
         bool avaibleCustomWindowCocos() { return m_handlerCocos != nullptr;  };
 
+        void setImguiPanel(geode::Function<void()> func) { m_panelImgui = std::move(func); }
+
+        bool hasImguiPanel() const { return m_panelImgui != nullptr; }
+
+        void drawImguiPanel() { if (m_panelImgui) m_panelImgui(); }
+
         std::string formatID(const std::string& windowName, const std::string& hackName);
 
         void sortHacksAlphabetically();
@@ -32,6 +38,7 @@ namespace NXR {
         std::vector<Hack> m_hacks;
 
         geode::Function<void(cocos2d::CCNode*)> m_handlerCocos = nullptr;
+        geode::Function<void()> m_panelImgui = nullptr;
     };
 
     class Gui {

@@ -8,7 +8,7 @@
 #include <memory>
 #include <algorithm>
 #include "nxr_text_style.hpp"
-#include "nxr_table_layer.hpp"
+#include "../imgui/nxr_imgui_menu.hpp"
 
 void updatePopupRowAlignment(cocos2d::CCMenu* row) {
     if (!row) return;
@@ -28,7 +28,11 @@ NXRHackSettingsPopup* NXRHackSettingsPopup::create(NXR::Hack& hack) {
 }
 
 void NXRHackSettingsPopup::open(NXR::Hack& hack, const std::string& origin) {
-    NXRTableLayer::openHackSettings(hack, origin);
+    if (NXR::Ui::layout() == NXR::Ui::Table) {
+        NXR::Imgui::openHackSettings(hack);
+        return;
+    }
+    if (auto* popup = NXRHackSettingsPopup::create(hack)) popup->show();
 }
 
 bool NXRHackSettingsPopup::init(NXR::Hack& hack) {
@@ -68,8 +72,8 @@ void NXRHackSettingsPopup::rebuild() {
     m_scrollLayer->m_contentLayer->removeAllChildren();
     m_scrollLayer->m_contentLayer->addChild(cocos2d::CCNode::create());
 
-    if (m_hack->avaibleCustomWindowCocos()) {
-        m_hack->callCustomWindowCocos(this);
+    if (m_hack->hasForm()) {
+        m_hack->callForm(*this);
     }
 
     m_scrollLayer->m_contentLayer->addChild(cocos2d::CCNode::create());
@@ -223,14 +227,6 @@ void NXRHackSettingsPopup::addConfigSelect(const std::string& labelText, const s
             }
             if (*shared) (*shared)(value);
         };
-        if (NXRTableLayer::isOpened() && !options.empty()) {
-            size_t index = 0;
-            for (size_t i = 0; i < options.size(); i++) {
-                if (options[i].second == now) index = i;
-            }
-            apply(options[(index + 1) % options.size()].second);
-            return;
-        }
         NXROptionPopup::create(labelText, options, now, std::move(apply))->show();
     });
 
@@ -446,4 +442,28 @@ void NXRHackSettingsPopup::addSeparator(float height) {
     auto node = cocos2d::CCLayerColor::create({181, 105, 56, 80});
     node->setContentSize({230.f, height});
     m_scrollLayer->m_contentLayer->addChild(node);
+}
+
+void NXRHackSettingsPopup::addBoundToggle(const std::string& labelText, bool current, geode::Function<void(bool)> setter) {
+    prepareNewRow();
+
+    auto toggle = NXR::Ui::makeToggler(0.8f, [setter = std::move(setter)](CCMenuItemToggler* sender) mutable {
+        setter(!sender->isOn());
+    });
+    toggle->toggle(current);
+    m_currentRow->addChild(toggle);
+
+    auto label = geode::Label::create(labelText, "GoogleSans.fnt"_spr);
+    label->setScale(0.55f);
+    if (label->getScaledContentSize().width > 160.f) label->setScale(160.f / label->getContentSize().width);
+    m_currentRow->addChild(label);
+
+    m_currentRow->updateLayout();
+    updatePopupRowAlignment(m_currentRow);
+}
+
+void NXRHackSettingsPopup::requestRebuild() {
+    geode::queueInMainThread([weak = geode::WeakRef(this)] {
+        if (auto popup = weak.lock()) popup->rebuild();
+    });
 }

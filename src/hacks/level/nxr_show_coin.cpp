@@ -75,14 +75,14 @@ class $modify(NXRShowCoinPlayLayer, PlayLayer) {
             if (!state) detach();
         });
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             colorKey = hack.formatAdditionalSetting("color"),
             opacityKey = hack.formatAdditionalSetting("opacity"),
             thickKey = hack.formatAdditionalSetting("thickness"),
             hideKey = hack.formatAdditionalSetting("hide_collected"),
             p2Key = hack.formatAdditionalSetting("from_p2")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigColor3Hex("Line Color", colorKey, "FFD700");
             popup->addConfigIntInput("Opacity", opacityKey, 0, 255, 220);
             popup->addConfigFloatInput("Thickness", thickKey, 0.5f, 10.f, 1.5f);

@@ -3,6 +3,7 @@
 #include <unordered_set>
 
 #include <Geode/Geode.hpp>
+#include "nxr_form.hpp"
 using namespace geode::prelude;
 
 namespace NXR {
@@ -26,7 +27,7 @@ namespace NXR {
         void addHookPtr(geode::Hook* ptr);
         void setGameVariableID(const std::string& key);
 
-        void setCustomWindowCocos(geode::Function<void(cocos2d::CCNode*)> func) { m_handlerCocos = std::move(func); };
+        void setForm(geode::Function<void(NXR::Form&)> func) { m_form = std::move(func); }
 
         bool getEnabled() const;
         bool getDisabled() const;
@@ -46,9 +47,9 @@ namespace NXR {
         void setKeybind(geode::Keybind const& keybind);
         geode::Keybind getKeybind() const { return m_keybind; }
 
-        void callCustomWindowCocos(cocos2d::CCNode* popupContent) { if (m_handlerCocos) m_handlerCocos(popupContent); };
+        void callForm(NXR::Form& form) { if (m_form) m_form(form); }
 
-        bool avaibleCustomWindowCocos() { return m_handlerCocos != nullptr;  };
+        bool hasForm() { return m_form != nullptr; }
 
         void callHandler(bool state);
         void enableHooks(bool state);
@@ -73,7 +74,7 @@ namespace NXR {
         std::unordered_set<geode::Hook*> m_hooksPtr;
         geode::Keybind m_keybind;
 
-        geode::Function<void(cocos2d::CCNode*)> m_handlerCocos = nullptr;
+        geode::Function<void(NXR::Form&)> m_form = nullptr;
 
         bool m_earlyInit = true;
         geode::Function<bool()> m_customCheatingCheck = nullptr;

@@ -217,7 +217,7 @@ class $modify(NXRLayoutModePlayLayer, PlayLayer) {
             if (!state) restore();
         });
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             style = hack.formatAdditionalSetting("style"),
             hideDeco = hack.formatAdditionalSetting("hide_deco"),
             hideGlow = hack.formatAdditionalSetting("hide_glow"),
@@ -233,8 +233,8 @@ class $modify(NXRLayoutModePlayLayer, PlayLayer) {
             interactColor = hack.formatAdditionalSetting("interact_color"),
             solidOpacity = hack.formatAdditionalSetting("solid_opacity"),
             decoOpacity = hack.formatAdditionalSetting("deco_opacity")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
 
             popup->addConfigSelect("Style", style, {
                 {"Custom", 1},
@@ -242,11 +242,7 @@ class $modify(NXRLayoutModePlayLayer, PlayLayer) {
                 {"Mono", 3},
                 {"Neon", 4},
                 {"High Contrast", 5}
-            }, 1, [weak = geode::WeakRef(popup)](int) {
-                geode::queueInMainThread([weak] {
-                    if (auto popup = weak.lock()) popup->rebuild();
-                });
-            });
+            }, 1, [popup](int) { popup->requestRebuild(); });
 
             popup->addSeparator();
             popup->addConfigToggle("Hide Decorations", hideDeco, true);

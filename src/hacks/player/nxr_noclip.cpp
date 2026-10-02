@@ -22,7 +22,7 @@ class $modify(NXRNoclipPlayLayer, PlayLayer) {
         (void) self.setHookPriority("PlayLayer::destroyPlayer", -30);
         hack.addHookPtr(self.getHook("PlayLayer::destroyPlayer").unwrap());
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             tintOnDeathKey = hack.formatAdditionalSetting("tint_on_death"),
             opacityKey = hack.formatAdditionalSetting("tint_opacity"),
             fadeKey = hack.formatAdditionalSetting("tint_fade"),
@@ -33,8 +33,8 @@ class $modify(NXRNoclipPlayLayer, PlayLayer) {
             limitAccValKey = hack.formatAdditionalSetting("limit_acc_val"),
             limitDeathsKey = hack.formatAdditionalSetting("limit_deaths"),
             limitDeathsValKey = hack.formatAdditionalSetting("limit_deaths_val")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigToggle("Tint On Death", tintOnDeathKey, false);
             popup->addConfigColor3Hex("Tint Color", colorKey, "FF00000");
             popup->addConfigIntInput("Opacity", opacityKey, 0, 255, 100);

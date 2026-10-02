@@ -3,6 +3,7 @@
 #include <vector>
 #include <utility>
 #include "../../core/nxr_hacks.hpp"
+#include "../../core/nxr_form.hpp"
 
 class NXROptionPopup : public geode::Popup {
 protected:
@@ -14,7 +15,7 @@ public:
     static NXROptionPopup* create(const std::string& title, const std::vector<std::pair<std::string, int>>& options, int current, geode::Function<void(int)> onPick);
 };
 
-class NXRHackSettingsPopup : public geode::Popup {
+class NXRHackSettingsPopup : public geode::Popup, public NXR::Form {
 protected:
     NXR::Hack* m_hack;
     bool init(NXR::Hack& hack);
@@ -28,15 +29,17 @@ public:
     void prepareNewRow();
     void rebuild();
 
-    void addConfigToggle(const std::string& labelText, const std::string& key, bool defaultValue = false, geode::Function<void(bool)> callback = nullptr);
-    void addConfigModeToggle(const std::string& key, const std::string& offText, const std::string& onText, int defaultValue = 1, geode::Function<void(int)> callback = nullptr);
-    void addConfigSelect(const std::string& labelText, const std::string& key, const std::vector<std::pair<std::string, int>>& options, int defaultValue, geode::Function<void(int)> callback = nullptr);
-    void addConfigRadio(const std::string& labelText, const std::string& key, const std::vector<std::pair<std::string, int>>& options, int defaultValue, geode::Function<void(int)> callback = nullptr);
-    void addConfigIntInput(const std::string& labelText, const std::string& key, int min, int max, int defaultValue = 0, geode::Function<void(int)> callback = nullptr);
-    void addConfigFloatInput(const std::string& labelText, const std::string& key, float min, float max, float defaultValue = 0.f, geode::Function<void(float)> callback = nullptr);
-    void addConfigColor3Hex(const std::string& labelText, const std::string& key, const std::string& defaultHex);
-    void addConfigColor4Hex(const std::string& labelText, const std::string& key, const std::string& defaultHex);
-    void addSeparator(float height = 1.f);
+    void addConfigToggle(const std::string& labelText, const std::string& key, bool defaultValue = false, geode::Function<void(bool)> callback = nullptr) override;
+    void addConfigModeToggle(const std::string& key, const std::string& offText, const std::string& onText, int defaultValue = 1, geode::Function<void(int)> callback = nullptr) override;
+    void addConfigSelect(const std::string& labelText, const std::string& key, const std::vector<std::pair<std::string, int>>& options, int defaultValue, geode::Function<void(int)> callback = nullptr) override;
+    void addConfigRadio(const std::string& labelText, const std::string& key, const std::vector<std::pair<std::string, int>>& options, int defaultValue, geode::Function<void(int)> callback = nullptr) override;
+    void addConfigIntInput(const std::string& labelText, const std::string& key, int min, int max, int defaultValue = 0, geode::Function<void(int)> callback = nullptr) override;
+    void addConfigFloatInput(const std::string& labelText, const std::string& key, float min, float max, float defaultValue = 0.f, geode::Function<void(float)> callback = nullptr) override;
+    void addConfigColor3Hex(const std::string& labelText, const std::string& key, const std::string& defaultHex) override;
+    void addConfigColor4Hex(const std::string& labelText, const std::string& key, const std::string& defaultHex) override;
+    void addBoundToggle(const std::string& labelText, bool current, geode::Function<void(bool)> setter) override;
+    void addSeparator(float height = 1.f) override;
+    void requestRebuild() override;
 };
 
 class NXRColorPopup : public geode::ColorPickPopup {

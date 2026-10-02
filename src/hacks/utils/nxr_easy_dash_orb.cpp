@@ -26,14 +26,14 @@ class $modify(NXREasyDashOrbGameLayer, GJBaseGameLayer) {
         NXR::tryAddHook(self, hack, "GJBaseGameLayer::processCommands");
         NXR::tryAddHook(self, hack, "GJBaseGameLayer::playerTouchedRing");
 
-        hack.setCustomWindowCocos([
+        hack.setForm([
             mode = hack.formatAdditionalSetting("mode"),
             pink = hack.formatAdditionalSetting("pink"),
             green = hack.formatAdditionalSetting("green"),
             p1 = hack.formatAdditionalSetting("p1"),
             p2 = hack.formatAdditionalSetting("p2")
-        ](cocos2d::CCNode* popupNode) {
-            auto* popup = static_cast<NXRHackSettingsPopup*>(popupNode);
+        ](NXR::Form& form) {
+            auto* popup = &form;
             popup->addConfigRadio("Mode", mode, {{"No Touch", 0}, {"Auto Click", 1}}, 0);
             popup->addSeparator();
             popup->addConfigToggle("Pink Dash Orb", pink, true);

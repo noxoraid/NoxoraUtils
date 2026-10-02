@@ -26,7 +26,8 @@
 			"res/*.png"
 		],
 		"files": [
-			"res/click_indicator.mp3"
+			"res/click_indicator.mp3",
+			"res/GoogleSans-Regular.ttf"
 		],
 		"fonts": {
 			"GoogleSans": {
