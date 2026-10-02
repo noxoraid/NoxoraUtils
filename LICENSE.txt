@@ -1,0 +1,132 @@
+Noxora Attribution License (NAL) v1.0
+
+Copyright (c) 2026 Noxora
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated files (the "Software"), to use, copy, modify,
+merge, publish, distribute, sublicense, and create derivative works from the
+Software, subject to the following conditions:
+
+1. ATTRIBUTION REQUIRED
+
+Any modified version, fork, derivative work, redistribution, or project that
+is based substantially or partially on this Software MUST provide clear and
+visible credit to the original project and creator.
+
+The required attribution must identify:
+
+    Creator: Noxora
+
+Acceptable forms of attribution include:
+
+    "Thanks to Noxora"
+    "Created by Noxora"
+    "Based on the original project by Noxora"
+    "Original creator: Noxora"
+    "Based on Noxora's work"
+
+2. ATTRIBUTION LOCATION
+
+When a modified or derivative version is publicly distributed, the required
+credit MUST appear in at least one publicly visible location associated with
+the distributed project.
+
+For Geode mods, attribution MUST be included in at least one of the
+following locations:
+
+    - The Geode mod description
+    - The mod's About or Credits section
+    - The project's README
+    - The project's documentation
+    - A credits screen within the mod
+    - The project's release or distribution page
+
+For publicly distributed Geode mods, attribution in the Geode mod
+description or Credits/About section is strongly preferred.
+
+3. NO REMOVAL OF ATTRIBUTION
+
+The original creator's attribution and this license notice must not be
+intentionally removed, hidden, or obscured from a derivative work.
+
+4. MODIFICATION
+
+You are permitted to modify, improve, adapt, translate, extend, or create
+derivative works from the Software.
+
+If you distribute a modified version, you must clearly indicate that
+modifications have been made and must retain attribution to Noxora.
+
+Example:
+
+    Based on the original project by Noxora.
+    Modified by [Your Name].
+
+5. REDISTRIBUTION
+
+You may redistribute the original or modified Software provided that:
+
+    1. The attribution requirement is preserved.
+    2. This license is included with the distributed Software or its
+       source repository.
+    3. You do not falsely claim to be the original creator of the Software.
+
+6. AI-ASSISTED DEVELOPMENT
+
+This Software may contain code, assets, documentation, or other material
+created or assisted by artificial intelligence tools.
+
+The use of artificial intelligence in the development of the Software does
+not remove or reduce the attribution requirements of this license.
+
+Attribution is required for the original project and its creator,
+regardless of whether portions of the Software were created manually,
+generated with AI assistance, or produced through a combination of both.
+
+This license does not claim that every individual line of code was
+personally written by Noxora.
+
+7. COMMERCIAL USE
+
+Commercial use is permitted unless otherwise stated by the original creator.
+
+Commercial redistribution does not remove or reduce the attribution
+requirements of this license.
+
+8. NAME AND BRANDING
+
+This license does not grant permission to use the name "Noxora", associated
+branding, logos, or trademarks in a manner that falsely suggests endorsement,
+partnership, or official affiliation.
+
+9. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+
+IN NO EVENT SHALL THE CREATOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+10. TERMINATION
+
+If you fail to comply with the attribution requirements of this license,
+the permissions granted by this license are automatically terminated.
+
+You may regain permission by correcting the violation and complying with
+all applicable terms of this license.
+
+11. ACCEPTANCE
+
+By using, copying, modifying, or distributing the Software, you agree to
+comply with the terms of this license.
+
+------------------------------------------------------------
+
+Original Creator: Noxora
+License: Noxora Attribution License (NAL) v1.0
+Copyright: (c) 2026 Noxora
+
+------------------------------------------------------------
