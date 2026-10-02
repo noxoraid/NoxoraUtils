@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(NXR VERSION 1.4.2)
+project(NXR VERSION 1.4.3)
 
 if (IOS OR "${CMAKE_SYSTEM_NAME}" STREQUAL "iOS")
     message(FATAL_ERROR "NXR does not support iOS. Supported: Windows, macOS and Android 64-bit")
@@ -29,7 +29,8 @@ if (NOT COMMAND CPMAddPackage)
     include($ENV{GEODE_SDK}/cmake/CPM.cmake)
 endif()
 
-CPMAddPackage("gh:matcool/gd-imgui-cocos#main")
+set(IMGUI_VERSION "v1.92.3")
+CPMAddPackage("gh:matcool/gd-imgui-cocos#geode")
 
 target_include_directories(${PROJECT_NAME} PRIVATE libs)
 target_link_libraries(${PROJECT_NAME} imgui-cocos)
