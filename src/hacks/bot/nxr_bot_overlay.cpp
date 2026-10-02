@@ -54,7 +54,6 @@ namespace {
     }
 
 
-    // Bot type: 1 = Auto, 2 = Hold, 3 = Click
     int botType() {
         return std::clamp(NXRConfig::get().get<int>("nxr.bot.type", 1), 1, 3);
     }
@@ -65,8 +64,6 @@ namespace {
         return ui->m_p1Jumping || ui->m_p1TouchId != -1 || ui->m_p2Jumping || ui->m_p2TouchId != -1;
     }
 
-    // Decides if playback may advance this frame.
-    // Returns the largest dt allowed (<= 0 means "wait"), or `dt` when nothing limits it.
     float playbackAllowance(PlayLayer* pl, float dt) {
         auto& st = State::get();
         st.waiting = false;
@@ -87,7 +84,6 @@ namespace {
             return dt;
         }
 
-        // Click: every tap lets the bot perform exactly one recorded click (press + release)
         auto& events = st.current.events;
         if (st.playIndex < st.lastPlayIndex) st.lastPlayIndex = st.playIndex;
         while (st.lastPlayIndex < st.playIndex && st.lastPlayIndex < events.size()) {
@@ -96,7 +92,6 @@ namespace {
         }
         if (tapped) st.clickCredits = 1;
 
-        // Next recorded press that has not been injected yet
         size_t next = st.playIndex;
         while (next < events.size() && !events[next].down()) next++;
         if (next >= events.size()) return dt;
@@ -331,7 +326,6 @@ class $modify(NXRBotUpdateLayer, GJBaseGameLayer) {
             if (st.stepRequests > 0) {
                 st.stepRequests--;
                 st.stepParticles = 4;
-                // Frame Step: 1.0 = one full tick per press, 0.5 = half a tick, 10 = ten ticks.
                 const float stepSize = std::clamp(NXRConfig::get().get<float>("nxr.bot.frame_step", 1.f), 0.1f, 10.f);
                 GJBaseGameLayer::update(stepSize / NXR::Bot::effectiveTps());
             }

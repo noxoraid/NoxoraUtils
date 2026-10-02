@@ -88,9 +88,7 @@ void NXRHacksTab::addToggle(NXR::Hack& hck) {
         customSettingsBtn->setScale(0.45f);
 
         auto customSettingsBtnClick = CCMenuItemExt::createSpriteExtra(customSettingsBtn, [&hck](CCMenuItemSpriteExtra* sender) {
-            if (auto popup = NXRHackSettingsPopup::create(hck)) {
-                popup->show();
-            }
+            NXRHackSettingsPopup::open(hck);
         });
 
         customSettingsBtnClick->setPosition({iconXOffset, 15.f});
@@ -103,7 +101,7 @@ void NXRHacksTab::addToggle(NXR::Hack& hck) {
         auto descSprite = CCSprite::create("NXR_infoIcon.png"_spr);
         descSprite->setScale(0.5f);
         auto descClick = CCMenuItemExt::createSpriteExtra(descSprite, [name, desc](CCMenuItemSpriteExtra* sender) {
-            if (auto* popup = NXRInfoPopup::create(name, desc)) popup->show();
+            NXR::Ui::showPopup(NXRInfoPopup::create(name, desc), name);
         });
 
         descClick->setPosition({iconXOffset, 15.f});
@@ -335,7 +333,7 @@ void NXRHacksTab::addConfigColor3Hex(const std::string& labelText, const std::st
     colorSprite->setScale(0.6f);
     colorSprite->setColor(color);
 
-    auto colorBtn = CCMenuItemExt::createSpriteExtra(colorSprite, [key, defaultHex, colorSprite](CCMenuItemSpriteExtra*) {
+    auto colorBtn = CCMenuItemExt::createSpriteExtra(colorSprite, [key, defaultHex, colorSprite, labelText](CCMenuItemSpriteExtra*) {
         cocos2d::ccColor3B cur = NXR::Utils::hexToColor(NXRConfig::get().get<std::string>(key, defaultHex));
         cocos2d::ccColor4B popupColor = { cur.r, cur.g, cur.b, 255 };
 
@@ -344,7 +342,7 @@ void NXRHacksTab::addConfigColor3Hex(const std::string& labelText, const std::st
             NXRConfig::get().set<std::string>(key, fmt::format("{:02X}{:02X}{:02X}", picked.r, picked.g, picked.b));
             if (sprite) sprite->setColor(geode::cocos::to3B(picked));
         });
-        popup->show();
+        NXR::Ui::showPopup(popup, labelText);
     });
     colorBtn->setPosition({18.f, 15.f});
     node->addChild(colorBtn);
@@ -444,7 +442,7 @@ void NXRHacksTab::addRadioRow(const std::vector<std::string>& labels, geode::Fun
         cell->setAnchorPoint({0, 0.5f});
 
         int index = static_cast<int>(i);
-        auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_togglerOn.png"_spr, "NXR_togglerOff.png"_spr, 0.7f, [index, togglers, select](CCMenuItemToggler*) {
+        auto toggle = CCMenuItemExt::createTogglerWithFilename("NXR_tableCheckOn.png"_spr, "NXR_tableCheckOff.png"_spr, 0.35f, [index, togglers, select](CCMenuItemToggler*) {
             int applied = (*select)(index);
             geode::queueInMainThread([togglers, applied] {
                 for (size_t k = 0; k < togglers->size(); k++) {

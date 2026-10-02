@@ -1,3 +1,10 @@
+# v1.4.3
+
+- **UI:** every on/off control in Panel and Table now uses a real check box (rounded square with a check mark) instead of a slider toggle. res/NXR_tableCheckOn.png and res/NXR_tableCheckOff.png were redrawn, and the radio rows use the same boxes. The Toggle Style setting was removed because the check box is the only style now.
+- **Table:** no more modal popups. Hack settings (Noclip, FPS Limiter, ...), the color picker, the hold-to-read description, and every Bot popup (select, load, delete, export, browse, new, info, merge) now open as floating windows that can be dragged, collapsed and closed with the X. They close by themselves when you confirm or cancel inside them.
+- **Table:** option selectors inside hack settings cycle with one tap instead of opening a popup. The Merge mode question is a floating window with two rows.
+- **Panel:** unchanged, it keeps its popups.
+
 # v1.4.2
 
 - **Table:** windows redrawn in the GDH style (dark windows, centered title, collapse arrow on the right). Every hack has an image check box on the left (res/NXR_tableCheckOn.png / NXR_tableCheckOff.png) and a triangle button on the right when it has settings.

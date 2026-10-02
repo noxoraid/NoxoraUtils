@@ -37,11 +37,6 @@ namespace NXR::Capture {
         if constexpr (requires { player.m_platformerXVelocity = value; }) player.m_platformerXVelocity = value;
     }
 
-    // Bit layout tambahan di PlayerState::flags (kompatibel dengan macro lama):
-    //   bit 8-10  : gamemode (0 cube,1 ship,2 ball,3 ufo,4 wave,5 robot,6 spider,7 swing)
-    //   bit 11    : mini
-    //   bit 12-14 : index speed (0..4), 7 = tidak diketahui
-    //   bit 15    : "mode valid" -> kalau 0 berarti macro lama, mode tidak dipaksa
     constexpr uint32_t kModeShift = 8;
     constexpr uint32_t kModeMask = 7u << kModeShift;
     constexpr uint32_t kMiniBit = 1u << 11;

@@ -7,6 +7,7 @@
 #include <fstream>
 #include "../../core/nxr_macro_import.hpp"
 #include "../../core/nxr_keybinds.hpp"
+#include "../../core/nxr_ui_mode.hpp"
 #include "../../interface/cocos/nxr_hacks_tab.hpp"
 #include "../../interface/cocos/nxr_hack_settings_popup.hpp"
 #include "../../interface/cocos/nxr_bot_popups.hpp"
@@ -344,24 +345,23 @@ namespace {
     }
 
     void startMergeFlow() {
-        auto* first = NXRReplayPickerPopup::create("Merge: pilih macro 1", "Pilih", [](const std::string& nameA) {
-            auto* second = NXRReplayPickerPopup::create("Merge: pilih macro 2", "Pilih", [nameA](const std::string& nameB) {
-                geode::createQuickPopup(
+        auto askName = [](const std::string& nameA, const std::string& nameB, MergeMode mode) {
+            NXR::Ui::showPopup(NXRNamePopup::create("Nama hasil merge", [nameA, nameB, mode](const std::string& out) {
+                mergeReplays(nameA, nameB, mode, out);
+            }), "Nama hasil merge");
+        };
+        NXR::Ui::showPopup(NXRReplayPickerPopup::create("Merge: pilih macro 1", "Pilih", [askName](const std::string& nameA) {
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Merge: pilih macro 2", "Pilih", [askName, nameA](const std::string& nameB) {
+                NXR::Ui::showChoice(
                     "Mode Merge",
-                    "<cy>Sambung</c>: macro 2 direkam dari startpos, checkpoint, atau Record Without Restart, lalu disambung ke macro 1.\n"
-                    "<cg>P1 + P2</c>: P1 dari macro 1, P2 dari macro 2 (yang lain noclip).",
-                    "Sambung", "P1 + P2",
-                    [nameA, nameB](auto*, bool players) {
-                        auto mode = players ? MergeMode::Players : MergeMode::Append;
-                        if (auto* namePopup = NXRNamePopup::create("Nama hasil merge", [nameA, nameB, mode](const std::string& out) {
-                            mergeReplays(nameA, nameB, mode, out);
-                        })) namePopup->show();
+                    {"Sambung: macro 2 disambung ke macro 1", "P1 + P2: P1 dari macro 1, P2 dari macro 2"},
+                    {
+                        {"Sambung", [askName, nameA, nameB] { askName(nameA, nameB, MergeMode::Append); }},
+                        {"P1 + P2", [askName, nameA, nameB] { askName(nameA, nameB, MergeMode::Players); }}
                     }
                 );
-            });
-            if (second) second->show();
-        });
-        if (first) first->show();
+            }), "Merge: pilih macro 2");
+        }), "Merge: pilih macro 1");
     }
 
     void restoreAutosave() {
@@ -421,7 +421,7 @@ namespace {
         std::error_code ec;
         std::filesystem::create_directories(getFolderMacroPath(), ec);
 
-        if (auto* popup = NXRReplayBrowserPopup::create("Open Replays", [](const std::filesystem::path& path) { loadImported(path); })) popup->show();
+        NXR::Ui::showPopup(NXRReplayBrowserPopup::create("Open Replays", [](const std::filesystem::path& path) { loadImported(path); }), "Open Replays");
     }
 }
 
@@ -465,7 +465,6 @@ public:
 };
 
 namespace {
-    // Not registered in any window: it only feeds the "Settings" popup of the Bot tab
     NXR::Hack g_botSettings("nxr.bot.settings", "Bot", "", false);
 }
 
@@ -542,10 +541,10 @@ $execute {
         tab->addPadding(6.f);
         tab->addRadioRow({"Disabled", "Record", "Playback"}, []{ return currentMode(); }, [](int mode) { return selectMode(mode); });
         tab->addSelector("Replays", []{ return replayLabel(); }, [](std::function<void()> refresh) {
-            if (auto* popup = NXRReplayPickerPopup::create("Select Replay", "Select", [refresh](const std::string& name) {
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Select Replay", "Select", [refresh](const std::string& name) {
                 State::get().selectedReplay = name;
                 refresh();
-            }, true)) popup->show();
+            }, true), "Select Replay");
         });
         tab->addConfigButton("Settings", [] {
             NXRHackSettingsPopup::open(g_botSettings, "panel:Bot");
@@ -570,23 +569,23 @@ $execute {
 
         tab->addConfigButton(
             "New", []{
-                if (auto* popup = NXRNamePopup::create("New Replay", [](const std::string& name) { createReplay(name); })) popup->show();
+                NXR::Ui::showPopup(NXRNamePopup::create("New Replay", [](const std::string& name) { createReplay(name); }), "New Replay");
             },
             "Save", []{ saveReplay(); }
         );
         tab->addConfigButton(
             "Load", []{
-                if (auto* popup = NXRReplayPickerPopup::create("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); })) popup->show();
+                NXR::Ui::showPopup(NXRReplayPickerPopup::create("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); }), "Load Replay");
             },
             "Delete", []{
-                if (auto* popup = NXRReplayPickerPopup::create("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); })) popup->show();
+                NXR::Ui::showPopup(NXRReplayPickerPopup::create("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); }), "Delete Replay");
             }
         );
         tab->addConfigButton("Restore Last Autosave", []{ restoreAutosave(); }, "Browse Replays", []{ openBrowser(); });
         tab->addConfigButton(
             "Merge Replays", []{ startMergeFlow(); },
             "Export JSON", []{
-                if (auto* popup = NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); })) popup->show();
+                NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
             }
         );
         tab->addPadding(6.f);

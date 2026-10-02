@@ -6,8 +6,6 @@
 using namespace NXR::Bot;
 
 namespace {
-    // Frame terakhir di A yang posisinya (x) paling dekat dengan titik awal B.
-    // Dipakai kalau B direkam dari startpos (frame B mulai dari 1 lagi, bukan frame asli level).
     bool matchByPosition(const Macro& a, const Macro& b, uint32_t& frameInA) {
         if (a.frames.empty() || b.frames.empty()) return false;
 
@@ -31,7 +29,6 @@ namespace {
             }
         }
 
-        // toleransi satu langkah fisika (~ 0.1 block per tick, dilonggarkan)
         return found && best < 40.f;
     }
 
@@ -75,7 +72,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
     result.layout = a.layout;
 
     if (mode == MergeMode::Players) {
-        // P1 dari A, P2 dari B. Frame harus sejajar (sama-sama direkam dari awal yang sama).
         for (const auto& ev : a.events) {
             if (ev.player() == 1) result.events.push_back(ev);
         }
@@ -105,7 +101,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
         report.shift = 0;
         report.note = "P1 dari macro 1, P2 dari macro 2";
     } else {
-        // Sambung waktu: A sampai titik sambung, lalu B.
         if (b.frames.empty() && b.events.empty()) { error = "Macro 2 kosong"; return false; }
 
         const uint32_t bFirstRow = b.frames.empty() ? 1u : b.frames.front().frame;
@@ -113,7 +108,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
         uint32_t cut = bFirstRow;
 
         if (bFirstRow <= 2) {
-            // B direkam dari startpos: frame dimulai dari 1 lagi, cari frame padanan di A lewat posisi.
             uint32_t frameInA = 0;
             if (!matchByPosition(a, b, frameInA)) {
                 error = "Titik awal macro 2 tidak ketemu di macro 1 (posisi beda jauh). Pastikan startpos-nya ada di jalur macro 1";
@@ -122,7 +116,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
             shift = static_cast<int64_t>(frameInA) - static_cast<int64_t>(bFirstRow);
             cut = frameInA;
         } else {
-            // B direkam dari checkpoint: frame sudah absolut.
             if (a.endFrame() < bFirstRow) {
                 error = "Macro 1 lebih pendek dari titik awal macro 2";
                 return false;
@@ -135,7 +128,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
             return static_cast<uint64_t>(v < 1 ? 1 : v);
         };
 
-        // A: semua yang sebelum titik sambung
         std::array<std::array<bool, 4>, 2> held{};
         for (const auto& ev : a.events) {
             if (ev.frame() >= cut) break;
@@ -152,7 +144,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
             result.supers.push_back(sf);
         }
 
-        // Lepas tombol yang masih ketahan dari A di titik sambung, B mulai dari keadaan bersih
         for (int slot = 0; slot < 2; slot++) {
             for (int btn = 1; btn <= 3; btn++) {
                 if (held[slot][btn]) {
@@ -161,7 +152,6 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
             }
         }
 
-        // B: digeser ke posisi frame yang benar
         for (const auto& ev : b.events) {
             result.events.push_back(InputEvent::make(shifted(ev.frame()), ev.player(), ev.button(), ev.down()));
         }

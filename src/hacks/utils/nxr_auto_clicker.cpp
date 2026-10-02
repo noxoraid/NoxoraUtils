@@ -26,15 +26,12 @@ namespace {
     ClickerState g_p1;
     ClickerState g_p2;
 
-    // Shared toggle loop. `acc` counts game ticks; every time it passes the length of the
-    // current phase (hold or release, in ticks, fractions allowed) the button flips.
     void runPhases(PlayerObject* player, ClickerState& state, double holdTicks, double releaseTicks) {
         holdTicks = std::max(holdTicks, 0.1);
         releaseTicks = std::max(releaseTicks, 0.1);
 
         state.acc += 1.0;
 
-        // Count how many flips fit into this tick, using a local copy of the state
         bool phaseHolding = state.holding;
         long long toggles = 0;
         while (toggles < 60000LL) {
@@ -46,7 +43,6 @@ namespace {
         }
         if (toggles <= 0) return;
 
-        // Flips inside one tick cancel out for the game, keep an odd count so a click still lands
         if (toggles % 2 == 0) toggles -= 1;
 
         for (long long i = 0; i < toggles; i++) {
@@ -64,8 +60,6 @@ namespace {
         runPhases(player, state, hold, release);
     }
 
-    // Angle mode: 90 = fast straight line, lower = longer up/down swings.
-    // Half period (ticks) = (90 - angle) / 3, minimum 0.5 tick (toggle every tick).
     void tickAngle(PlayerObject* player, ClickerState& state, double angle) {
         angle = std::clamp(angle, 0.0, 90.0);
         const double half = std::max(0.5, (90.0 - angle) / 3.0);

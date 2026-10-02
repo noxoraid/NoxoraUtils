@@ -214,7 +214,7 @@ void NXRHackSettingsPopup::addConfigSelect(const std::string& labelText, const s
     auto shared = std::make_shared<geode::Function<void(int)>>(std::move(callback));
     auto button = geode::cocos::CCMenuItemExt::createSpriteExtra(arrow, [this, labelText, key, defaultValue, options, nameOf, labelRef, shared](CCMenuItemSpriteExtra*) {
         const int now = NXRConfig::get().get<int>(key, defaultValue);
-        NXROptionPopup::create(labelText, options, now, [key, labelText, nameOf, labelRef, shared](int value) {
+        auto apply = [key, labelText, nameOf, labelRef, shared](int value) {
             NXRConfig::get().set<int>(key, value);
             if (auto* text = labelRef.data()) {
                 text->setString(fmt::format("{}: {}", labelText, nameOf(value)).c_str());
@@ -222,7 +222,16 @@ void NXRHackSettingsPopup::addConfigSelect(const std::string& labelText, const s
                 if (text->getScaledContentSize().width > 140.f) text->setScale(140.f / text->getContentSize().width);
             }
             if (*shared) (*shared)(value);
-        })->show();
+        };
+        if (NXRTableLayer::isOpened() && !options.empty()) {
+            size_t index = 0;
+            for (size_t i = 0; i < options.size(); i++) {
+                if (options[i].second == now) index = i;
+            }
+            apply(options[(index + 1) % options.size()].second);
+            return;
+        }
+        NXROptionPopup::create(labelText, options, now, std::move(apply))->show();
     });
 
     m_currentRow->addChild(label);
@@ -326,7 +335,7 @@ void NXRHackSettingsPopup::addConfigColor3Hex(const std::string& labelText, cons
     colorSprite->setScale(0.6f);
     colorSprite->setColor(color);
 
-    auto colorBtn = CCMenuItemExt::createSpriteExtra(colorSprite, [this, key, defaultHex, colorSprite](CCMenuItemSpriteExtra*) {
+    auto colorBtn = CCMenuItemExt::createSpriteExtra(colorSprite, [this, key, defaultHex, colorSprite, labelText](CCMenuItemSpriteExtra*) {
         std::string curHex = NXRConfig::get().get<std::string>(key, defaultHex);
         cocos2d::ccColor3B curColor = NXR::Utils::hexToColor(curHex);
 
@@ -340,7 +349,7 @@ void NXRHackSettingsPopup::addConfigColor3Hex(const std::string& labelText, cons
             NXRConfig::get().set<std::string>(key, newHex);
             colorSprite->setColor(geode::cocos::to3B(formatColor));
         });
-        popup->show();
+        NXR::Ui::showPopup(popup, labelText);
     });
     m_currentRow->addChild(colorBtn);
 
@@ -382,7 +391,7 @@ void NXRHackSettingsPopup::addConfigColor4Hex(const std::string& labelText, cons
     colorSprite->setColor(color3B);
     colorSprite->setOpacity(alphaByte);
 
-    auto colorBtn = CCMenuItemExt::createSpriteExtra(colorSprite, [this, key, defaultHex, colorSprite](CCMenuItemSpriteExtra*) {
+    auto colorBtn = CCMenuItemExt::createSpriteExtra(colorSprite, [this, key, defaultHex, colorSprite, labelText](CCMenuItemSpriteExtra*) {
         std::string curHex = NXRConfig::get().get<std::string>(key, defaultHex);
         cocos2d::ccColor4F cur4F = NXR::Utils::hexToColor4F(curHex);
 
@@ -403,7 +412,7 @@ void NXRHackSettingsPopup::addConfigColor4Hex(const std::string& labelText, cons
             colorSprite->setColor(geode::cocos::to3B(formatColor));
             colorSprite->setOpacity(formatColor.a);
         });
-        popup->show();
+        NXR::Ui::showPopup(popup, labelText);
     });
     m_currentRow->addChild(colorBtn);
 

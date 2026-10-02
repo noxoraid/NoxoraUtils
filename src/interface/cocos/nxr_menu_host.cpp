@@ -2,7 +2,6 @@
 #include "nxr_hacks_layer.hpp"
 #include "nxr_table_layer.hpp"
 
-// One entry point for both layouts so the floating button and the keybind do not care which one is active.
 bool NXR::Ui::menuOpen() {
     return NXRHacksLayer::isOpened() || NXRTableLayer::isOpened();
 }
@@ -27,4 +26,26 @@ void NXR::Ui::toggleMenu() {
 void NXR::Ui::reopenMenu() {
     closeMenu();
     geode::queueInMainThread([] { openMenu(); });
+}
+
+void NXR::Ui::showPopup(geode::Popup* popup, const std::string& title) {
+    if (!popup) return;
+    if (NXRTableLayer::isOpened() && NXRTableLayer::hostPopup(popup, title)) return;
+    popup->show();
+}
+
+void NXR::Ui::showChoice(const std::string& title, const std::vector<std::string>& notes, const std::vector<std::pair<std::string, std::function<void()>>>& choices) {
+    if (NXRTableLayer::isOpened()) {
+        NXRTableLayer::openChoice(title, notes, choices);
+        return;
+    }
+    if (choices.size() < 2) return;
+    std::string body;
+    for (auto& note : notes) body += note + "\n";
+    auto first = choices[0].second;
+    auto second = choices[1].second;
+    geode::createQuickPopup(title.c_str(), body, choices[0].first.c_str(), choices[1].first.c_str(), [first, second](auto*, bool secondPicked) {
+        if (secondPicked) second();
+        else first();
+    });
 }

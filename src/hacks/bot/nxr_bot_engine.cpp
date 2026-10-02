@@ -225,8 +225,6 @@ namespace {
         return &*it;
     }
 
-    // Paksa gamemode/mini/speed sesuai rekaman. Ini yang bikin playback 100% konsisten
-    // walau portal tidak tersentuh (misal portal ufo di awal level) di attempt ke-2, ke-3, dst.
     void enforceMode(PlayLayer* pl, PlayerObject* p, uint32_t flags) {
         if (!pl || !p || !(flags & Cap::kModeValid)) return;
 
@@ -275,8 +273,6 @@ namespace {
         p->flipGravity(want, true);
     }
 
-    // Toleransi sangat kecil: koreksi dilakukan SEBELUM selisih sempat membesar jadi hit di spike/gap sempit.
-    // (Dulu 0.05 unit, itu cukup besar untuk wave/ship di level impossible.)
     constexpr float kDriftEps = 0.002f;
     constexpr float kVelEps = 0.002f;
     constexpr float kRotEps = 1.f;
@@ -285,7 +281,6 @@ namespace {
         if (!p || s.x == 0.f || s.y == 0.f) return false;
         const auto pos = p->getPosition();
         if (std::fabs(pos.x - s.x) > kDriftEps || std::fabs(pos.y - s.y) > kDriftEps) return true;
-        // Kecepatan yang melenceng akan jadi selisih posisi di tick berikutnya, tangkap lebih awal.
         if (full && std::fabs(static_cast<float>(p->m_yVelocity) - s.yVel) > kVelEps) return true;
         return false;
     }
@@ -297,8 +292,6 @@ namespace {
         return diff > kRotEps;
     }
 
-    // force: tulis ulang state penuh walau posisi sudah cocok (dipakai setelah load checkpoint).
-    // Tanpa force, state penuh hanya ditulis saat player melenceng dari rekaman.
     void applyPlayback(GJBaseGameLayer* layer, uint64_t frame, bool force = false) {
         auto& m = State::get().current;
         if (frame == 0 || m.frames.empty()) return;
@@ -310,7 +303,6 @@ namespace {
         const bool dual = layer->m_gameState.m_isDualMode;
         const bool platformer = isPlatformer();
 
-        // Sebelum restoreSuper: toggle mode membuat ulang visual, field mentah dari blob harus menimpa sesudahnya.
         if (auto* pl = PlayLayer::get(); pl && static_cast<GJBaseGameLayer*>(pl) == layer) {
             enforceMode(pl, layer->m_player1, row->p1.flags);
             if (dual) enforceMode(pl, layer->m_player2, row->p2.flags);
@@ -337,8 +329,6 @@ namespace {
         applyHold(layer, row->hold, dual);
     }
 
-    // True kalau kematian di playback pasti akibat desync: rekaman yang dipakai selamat melewati frame ini
-    // (attempt mati tidak pernah disimpan, jadi baris frame ini hanya ada kalau pemain hidup).
     bool isDesyncDeath(PlayLayer* pl, GameObject* object) {
         auto& st = State::get();
         if (st.mode != Mode::Playing || !rescueEnabled()) return false;
@@ -790,7 +780,6 @@ class $modify(NXRBotPlayLayer, PlayLayer) {
         if (State::get().mode == Mode::Playing && !m_levelEndAnimationStarted) {
             if (!playbackDeathEnabled()) return;
             if (isDesyncDeath(this, object)) {
-                // Jangan mati: pemain di-snap ke state rekaman lewat applyPlayback() di akhir tick ini.
                 noteRescue();
                 return;
             }

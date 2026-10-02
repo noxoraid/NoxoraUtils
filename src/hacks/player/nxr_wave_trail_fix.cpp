@@ -6,7 +6,6 @@
 using namespace geode::prelude;
 
 namespace {
-    // Last point we pushed for P1 / P2, used to avoid sending the same point twice
     CCPoint g_last[2];
     bool g_hasLast[2] = {false, false};
 
@@ -19,10 +18,8 @@ class $modify(NXRWaveTrailFixPlayerObject, PlayerObject) {
     void update(float dt) {
         PlayerObject::update(dt);
 
-        // Toggle lives in Bot > Settings
         if (!NXRConfig::get().get<bool>("nxr.bot.wave_trail_fix", true)) return;
 
-        // Only the real players: the trajectory preview uses fake PlayerObjects that must be left alone
         auto* pl = PlayLayer::get();
         if (!pl) return;
 

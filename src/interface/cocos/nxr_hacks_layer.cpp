@@ -39,16 +39,6 @@ void nxrBuildSettingsTab(NXRHacksTab* tab) {
         });
     tab->addText("Tap the key button, then press a key. Esc or Clear removes it", 0.42f);
     tab->addSeparator();
-    tab->addText("Toggle Style", 0.6f);
-    tab->addRadioRow({"Switch", "Checkbox"},
-        [] { return NXR::Ui::toggleStyle(); },
-        [](int index) {
-            NXRConfig::get().set<int>(NXR::Ui::kToggleStyleKey, index);
-            geode::queueInMainThread([] { NXR::Ui::reopenMenu(); });
-            return index;
-        });
-    tab->addText("Switch: slider toggle. Checkbox: tap once = on, tap again = off", 0.42f);
-    tab->addSeparator();
     tab->addText("Theme", 0.6f);
     tab->addRadioRow({"Basic", "Normal", "Medium", "Pro"},
         [] { return NXR::Theme::current() - 1; },
@@ -87,7 +77,7 @@ bool NXRHacksLayer::init() {
     m_lastIndexScroll = config.get<int>("nxr.gui_mobile.lastIndexScroll", -1);
 
     auto& windows = gui.getWindows();
-    m_index = std::clamp(m_index, 0, std::max(0, static_cast<int>(windows.size())));   // last index = Settings tab
+    m_index = std::clamp(m_index, 0, std::max(0, static_cast<int>(windows.size())));
 
     m_closeBtn->setVisible(false);
 

@@ -1,6 +1,7 @@
 #include "../../core/nxr_theme.hpp"
 #include "nxr_menu.hpp"
 #include "nxr_bot_popups.hpp"
+#include "../../core/nxr_ui_mode.hpp"
 #include <algorithm>
 #include <filesystem>
 #include <limits>
@@ -421,7 +422,7 @@ bool NXRReplayPickerPopup::init(const std::string& title, const std::string& act
         auto infoButton = geode::cocos::CCMenuItemExt::createSpriteExtra(infoSprite, [name](CCMenuItemSpriteExtra*) {
             NXR::Bot::Macro macro;
             if (!NXR::Bot::loadMacro(macro, NXR::Bot::macroPathFor(name))) return;
-            NXRReplayInfoPopup::create(name, macro)->show();
+            NXR::Ui::showPopup(NXRReplayInfoPopup::create(name, macro), "Info: " + name);
         });
         row->addChild(infoButton);
 

@@ -4,7 +4,6 @@
 #include "../../core/nxr_config.hpp"
 #include "../../core/nxr_utils.hpp"
 
-// User-chosen font size and colour (Settings tab). Applied once to every label of a freshly built menu.
 namespace NXR::Ui {
     inline constexpr const char* kFontScaleKey = "nxr.ui.font_scale";
     inline constexpr const char* kFontColorKey = "nxr.ui.font_color";
@@ -15,7 +14,6 @@ namespace NXR::Ui {
         return std::clamp(NXRConfig::get().get<float>(kFontScaleKey, 1.f), 0.6f, 1.6f);
     }
 
-    // The colour a label should have: the user's colour when enabled, otherwise `fallback`
     inline cocos2d::ccColor3B textColor(cocos2d::ccColor3B fallback) {
         auto& config = NXRConfig::get();
         if (!config.get<bool>(kFontColorOnKey, true)) return fallback;
@@ -24,7 +22,6 @@ namespace NXR::Ui {
 
     inline void applyTextStyle(cocos2d::CCNode* root) {
         if (!root) return;
-        // Text inside inputs sits on a dark field, leave it alone
         if (geode::cast::typeinfo_cast<geode::TextInput*>(root)) return;
 
         const bool isLabel = geode::cast::typeinfo_cast<geode::Label*>(root) != nullptr

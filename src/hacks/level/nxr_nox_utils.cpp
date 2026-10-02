@@ -341,7 +341,7 @@ CCMenuItemSpriteExtra* NXR::NoxUtils::makePauseButton() {
     auto icon = CCSprite::create("NXR_noxUtilsBtn.png"_spr);
     auto button = CCMenuItemExt::createSpriteExtra(icon, [](CCMenuItemSpriteExtra*) {
         if (!PlayLayer::get()) return;
-        if (auto* popup = NXRHackSettingsPopup::create(hackOf(kWindow, kName))) popup->show();
+        NXRHackSettingsPopup::open(hackOf(kWindow, kName));
     });
     button->setID("nox-utils-button"_spr);
     return button;

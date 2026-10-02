@@ -231,7 +231,6 @@ namespace NXR::Bot {
         uint64_t ticks = 0;
         int stepParticles = 0;
 
-        // Bot type (1 = Auto, 2 = Hold, 3 = Click). Hold/Click make playback wait for the player
         bool waiting = false;
         bool prevTouch = false;
         int clickCredits = 0;
@@ -243,7 +242,6 @@ namespace NXR::Bot {
         bool pendingRestart = false;
         bool pendingHere = false;
 
-        // Desync Rescue: deaths that happen in playback on a frame the recording survived
         uint32_t rescues = 0;
         uint64_t firstRescueFrame = 0;
         uint64_t lastRescueFrame = 0;

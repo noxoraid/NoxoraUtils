@@ -15,6 +15,8 @@ public:
     static void openHackSettings(NXR::Hack& hack, const std::string& origin = "");
     static void openUiSettings(const std::string& origin = "");
     static bool popupBlocking();
+    static bool hostPopup(geode::Popup* popup, const std::string& title);
+    static void openChoice(const std::string& title, const std::vector<std::string>& notes, const std::vector<std::pair<std::string, std::function<void()>>>& choices);
 
     ~NXRTableLayer() override;
 
@@ -35,7 +37,7 @@ protected:
         cocos2d::CCSprite* checkOff = nullptr;
     };
 
-    enum class Kind { Rows, BotPanel, HackSettings, UiSettings };
+    enum class Kind { Rows, BotPanel, HackSettings, UiSettings, Embedded };
 
     struct Spec {
         std::string name;
@@ -43,8 +45,11 @@ protected:
         Kind kind = Kind::Rows;
         std::vector<Row> rows;
         NXR::Hack* hack = nullptr;
+        geode::Ref<geode::Popup> popup;
         std::string windowName;
         bool closable = false;
+        std::string origin;
+        bool pinned = false;
         float x = -1.f;
         float y = -1.f;
     };
@@ -54,7 +59,10 @@ protected:
         std::string id;
         Kind kind = Kind::Rows;
         NXR::Hack* hack = nullptr;
+        geode::Ref<geode::Popup> popup;
         bool closable = false;
+        bool pinned = false;
+        std::string origin;
         cocos2d::CCNode* node = nullptr;
         cocos2d::CCDrawNode* arrow = nullptr;
         cocos2d::CCLayerColor* body = nullptr;
@@ -86,7 +94,8 @@ protected:
 #endif
 
     void rebuild(bool save = true);
-    void buildWindow(Spec spec, int index, int total);
+    void buildWindow(Spec spec);
+    void reflow();
     void drawArrow(Win& w);
     void refreshRows();
     void refreshRow(Row& row);
