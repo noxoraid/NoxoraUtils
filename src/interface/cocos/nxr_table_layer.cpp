@@ -56,6 +56,12 @@ namespace {
         return sprite;
     }
 
+    struct PopupAccess : geode::Popup {
+        static CCMenuItemSpriteExtra* closeBtn(geode::Popup* popup) {
+            return popup->*(&PopupAccess::m_closeBtn);
+        }
+    };
+
     void keepTouchScroll(geode::ScrollLayer* scroll) {
         if (!scroll) return;
 #ifdef GEODE_IS_DESKTOP
@@ -434,7 +440,7 @@ void NXRTableLayer::buildWindow(Spec spec) {
                 popup->setTouchEnabled(false);
                 popup->setKeypadEnabled(false);
                 popup->setVisible(false);
-                if (popup->m_closeBtn) popup->m_closeBtn->setVisible(false);
+                if (auto* closeBtn = PopupAccess::closeBtn(popup)) closeBtn->setVisible(false);
                 const auto size = keep->getContentSize();
                 keep->setAnchorPoint({0.f, 0.f});
                 keep->setPosition({0.f, 0.f});
