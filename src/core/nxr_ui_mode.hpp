@@ -13,6 +13,7 @@ namespace NXR::Ui {
     inline constexpr const char* kLayoutKey = "nxr.ui.layout";
     inline constexpr const char* kTableScaleKey = "nxr.ui.table_scale";
     inline constexpr const char* kToggleStyleKey = "nxr.ui.toggle_style";
+    inline constexpr const char* kSettingsPopupKey = "nxr.ui.settings_popup";
 
     inline constexpr float kSwitchScale = 1.f;
     inline constexpr float kCheckScale = 1.5f;
@@ -27,6 +28,15 @@ namespace NXR::Ui {
         Switch = 0,
         Check = 1,
     };
+
+    enum SettingsPopup : int {
+        Popup = 0,
+        Clean = 1,
+    };
+
+    inline int settingsPopup() {
+        return std::clamp(NXRConfig::get().get<int>(kSettingsPopupKey, Popup), static_cast<int>(Popup), static_cast<int>(Clean));
+    }
 
     inline int toggleStyle() {
         return std::clamp(NXRConfig::get().get<int>(kToggleStyleKey, Switch), static_cast<int>(Switch), static_cast<int>(Check));

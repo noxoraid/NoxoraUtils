@@ -12,6 +12,61 @@ namespace {
     constexpr const char* kOpenMenuBind = "nxr.menu::toggle";
 }
 
+void nxrBuildKeybindTab(NXRHacksTab* tab) {
+    auto& keybinds = NXR::Keybinds::get();
+
+    tab->addPadding(4.f);
+    tab->addText("Tap a key button, then press a key. That key toggles the feature without opening the menu. Esc or Clear removes it", 0.42f);
+
+    for (auto& window : NXR::Gui::get().getWindows()) {
+        if (window.getHacks().empty()) continue;
+        const std::string windowName = window.getName();
+
+        tab->addSeparator();
+        tab->addText(windowName, 0.6f);
+
+        for (auto& hack : window.getHacks()) {
+            const std::string hackName = hack.getName();
+            tab->addKeybindRow(hackName,
+                [windowName, hackName] {
+                    auto& kb = NXR::Keybinds::get();
+                    if (kb.isRecording(windowName, hackName)) return std::string("Press a key...");
+                    const auto bind = NXR::Gui::get().getWindow(windowName).findHackByName(hackName).getKeybind();
+                    return bind.key == cocos2d::KEY_None ? std::string("None") : bind.toString();
+                },
+                [windowName, hackName] { NXR::Keybinds::get().startRecording(windowName, hackName); },
+                [windowName, hackName] {
+                    NXR::Keybinds::get().stopRecording();
+                    NXR::Keybinds::get().clearHackBind(windowName, hackName);
+                });
+        }
+    }
+
+#ifdef GEODE_IS_DESKTOP
+    const auto actions = keybinds.customActions();
+    if (!actions.empty()) {
+        tab->addSeparator();
+        tab->addText("Actions", 0.6f);
+        for (const auto& [id, label] : actions) {
+            const std::string actionId = id;
+            tab->addKeybindRow(label,
+                [actionId] {
+                    auto& kb = NXR::Keybinds::get();
+                    if (kb.isRecordingCustom(actionId)) return std::string("Press a key...");
+                    const auto bind = kb.getBind(actionId);
+                    return bind.key == cocos2d::KEY_None ? std::string("None") : bind.toString();
+                },
+                [actionId] { NXR::Keybinds::get().startRecordingCustom(actionId); },
+                [actionId] {
+                    NXR::Keybinds::get().stopRecording();
+                    NXR::Keybinds::get().clearCustomBind(actionId);
+                });
+        }
+    }
+#endif
+    tab->addPadding(4.f);
+}
+
 void nxrBuildSettingsTab(NXRHacksTab* tab) {
     tab->addPadding(4.f);
     tab->addText("Menu Layout", 0.6f);
@@ -87,7 +142,11 @@ bool NXRHacksLayer::init() {
     m_lastIndexScroll = config.get<int>("nxr.gui_mobile.lastIndexScroll", -1);
 
     auto& windows = gui.getWindows();
-    m_index = std::clamp(m_index, 0, std::max(0, static_cast<int>(windows.size())));
+    int shownWindows = 0;
+    for (auto& win : windows) {
+        if (win.getName() != "Settings") shownWindows++;
+    }
+    m_index = std::clamp(m_index, 0, shownWindows + 1);
 
     m_closeBtn->setVisible(false);
 
@@ -161,34 +220,37 @@ bool NXRHacksLayer::init() {
     }
 
 
-    {
-        const int settingsIndex = i;
-        auto button = ButtonSprite::create("Settings", 90, true, "GoogleSans.fnt"_spr, (settingsIndex == m_index) ? NXR::Theme::buttonOn() : NXR::Theme::button(), 30.f, 0.7f);
-        button->m_label->setColor(NXR::Ui::textColor((settingsIndex == m_index) ? ccColor3B({255, 236, 179}) : ccColor3B({255, 255, 255})));
+    auto addSpecialTab = [&](const std::string& tabName, const std::function<void(NXRHacksTab*)>& build) {
+        const int tabIndex = i;
+        auto button = ButtonSprite::create(tabName.c_str(), 90, true, "GoogleSans.fnt"_spr, (tabIndex == m_index) ? NXR::Theme::buttonOn() : NXR::Theme::button(), 30.f, 0.7f);
+        button->m_label->setColor(NXR::Ui::textColor((tabIndex == m_index) ? ccColor3B({255, 236, 179}) : ccColor3B({255, 255, 255})));
         button->setScale(0.8f);
 
-        auto buttonClick = CCMenuItemExt::createSpriteExtra(button, [this, settingsIndex](CCMenuItemSpriteExtra*) {
-            switchTab(settingsIndex);
+        auto buttonClick = CCMenuItemExt::createSpriteExtra(button, [this, tabIndex](CCMenuItemSpriteExtra*) {
+            switchTab(tabIndex);
         });
         m_buttonTabs.push_back(buttonClick);
         tabsMenu->addChild(buttonClick);
 
         auto tab = NXRHacksTab::create();
-        tab->setVisible(settingsIndex == m_index);
-        tab->setID(fmt::format("{}"_spr, "Settings"));
+        tab->setVisible(tabIndex == m_index);
+        tab->setID(fmt::format("{}"_spr, tabName));
         m_mainLayer->addChild(tab);
 
-        nxrBuildSettingsTab(tab);
+        build(tab);
 
         tab->m_scrollLayer->m_contentLayer->updateLayout();
-        if (settingsIndex == m_index && m_lastIndexScroll != -1)
+        if (tabIndex == m_index && m_lastIndexScroll != -1)
             tab->m_scrollLayer->m_contentLayer->setPositionY(static_cast<float>(m_lastIndexScroll));
         else
             tab->m_scrollLayer->moveToTop();
 
         m_tabs.push_back(tab);
         i++;
-    }
+    };
+
+    addSpecialTab("Keybind", [](NXRHacksTab* tab) { nxrBuildKeybindTab(tab); });
+    addSpecialTab("Settings", [](NXRHacksTab* tab) { nxrBuildSettingsTab(tab); });
 
     tabsMenu->setLayout(
         geode::ColumnLayout::create()

@@ -3,6 +3,7 @@
 #include "nxr_hacks_tab.hpp"
 
 void nxrBuildSettingsTab(NXRHacksTab* tab);
+void nxrBuildKeybindTab(NXRHacksTab* tab);
 
 class NXRHacksLayer : public geode::Popup {
 private:

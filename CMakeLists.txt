@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
-project(NXR VERSION 1.4.3)
+project(NXR VERSION 1.4.4)
 
 if (IOS OR "${CMAKE_SYSTEM_NAME}" STREQUAL "iOS")
     message(FATAL_ERROR "NXR does not support iOS. Supported: Windows, macOS and Android 64-bit")

@@ -1,3 +1,10 @@
+# v1.4.4
+
+- **Table:** new setting **Hack Settings Popup** with two modes. **Popup** is the floating window with title bar, arrow and X like before. **Clean** shows only the options (no title bar, no arrow, no X) and closes when you tap any empty space outside the menu. Tapping inside the popup or on the menu windows does not close it. Table only, Panel is unchanged.
+- **Table:** a window now opens and collapses from the arrow, from the title text, or from anywhere on the title bar. A tap toggles it, a drag still moves the window.
+- **Keybind:** new **Keybind** tab in Table and Panel. Every hack from every tab is listed automatically (new hacks appear by themselves). Tap the key button, press a key, and that key toggles the hack without opening the menu. Esc or Clear removes it. Saved in keybinds.json.
+- **Fix:** a keybind no longer toggles a hack that is disabled.
+
 # v1.4.3
 
 - **UI:** every on/off control in Panel and Table now uses a real check box (rounded square with a check mark) instead of a slider toggle. res/NXR_tableCheckOn.png and res/NXR_tableCheckOff.png were redrawn, and the radio rows use the same boxes. The Toggle Style setting was removed because the check box is the only style now.

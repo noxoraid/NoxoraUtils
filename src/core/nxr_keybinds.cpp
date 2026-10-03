@@ -53,7 +53,9 @@ void Keybinds::init() {
 
             if (event.action == geode::KeyboardInputData::Action::Press && m_bindsMap.contains(pressedBind)) {
                 for (const auto& [windowName, hackName] : m_bindsMap[pressedBind]) {
-                    Gui::get().getWindow(windowName).findHackByName(hackName).toggle();
+                    auto& target = Gui::get().getWindow(windowName).findHackByName(hackName);
+                    if (target.getDisabled()) continue;
+                    target.toggle();
                     handled = true;
                 }
             }

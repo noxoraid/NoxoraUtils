@@ -33,6 +33,8 @@ namespace {
         std::vector<NXR::Hack*> settings;
         std::unordered_set<std::string> infoOpen;
         ImGuiID dragId = 0;
+        ImGuiID titleDown = 0;
+        ImVec2 titlePos = ImVec2(0.f, 0.f);
         bool scrolled = false;
         bool sliderActive = false;
         float uiScale = 1.f;
@@ -147,10 +149,12 @@ namespace {
 
         applyFontScale(g.uiScale * NXR::Ui::fontScale() * fontUnit);
         io.ConfigWindowsMoveFromTitleBarOnly = true;
+        io.MouseDoubleClickTime = 0.f;
 
         if (ImGui::IsMouseClicked(0)) {
             g.scrolled = false;
             g.dragId = 0;
+            g.titleDown = 0;
         }
     }
 
@@ -236,10 +240,10 @@ namespace {
         return changed;
     }
 
-    void touchScroll() {
+    void touchScroll(bool hasTitle = true) {
         ImGuiIO& io = ImGui::GetIO();
         const ImGuiID id = ImGui::GetID("##touchscroll");
-        const bool inBody = io.MousePos.y > ImGui::GetWindowPos().y + ImGui::GetFrameHeight();
+        const bool inBody = io.MousePos.y > ImGui::GetWindowPos().y + (hasTitle ? ImGui::GetFrameHeight() : 0.f);
 
         if (ImGui::IsMouseClicked(0) && inBody && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem)) {
             g.dragId = id;
@@ -250,6 +254,40 @@ namespace {
         if (g.scrolled || ImGui::IsMouseDragging(0, kDragStart * g.uiScale)) {
             ImGui::SetScrollY(ImGui::GetScrollY() - io.MouseDelta.y);
             g.scrolled = true;
+        }
+    }
+
+    void titleTap(bool hasClose = false) {
+        const ImGuiStyle& st = ImGui::GetStyle();
+        const ImVec2 pos = ImGui::GetWindowPos();
+        const float width = ImGui::GetWindowWidth();
+        const float height = ImGui::GetFrameHeight();
+        const float edge = st.FramePadding.x * 2.f + ImGui::GetFontSize();
+
+        float left = 0.f;
+        float right = hasClose ? edge : 0.f;
+        if (st.WindowMenuButtonPosition == ImGuiDir_Left) left = edge;
+        else if (st.WindowMenuButtonPosition == ImGuiDir_Right) right += edge;
+
+        const ImVec2 a(pos.x + left, pos.y);
+        const ImVec2 b(pos.x + width - right, pos.y + height);
+        const ImGuiID id = ImGui::GetID("##titletap");
+        const bool over = ImGui::IsMouseHoveringRect(a, b, false) && ImGui::IsWindowHovered(ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
+
+        if (ImGui::IsMouseClicked(0) && over) {
+            g.titleDown = id;
+            g.titlePos = pos;
+        }
+
+        if (g.titleDown == id && ImGui::IsMouseReleased(0)) {
+            g.titleDown = 0;
+            const ImVec2 drag = ImGui::GetMouseDragDelta(0, 0.f);
+            const float limit = kDragStart * g.uiScale;
+            const bool still = drag.x * drag.x + drag.y * drag.y < limit * limit;
+            const bool unmoved = std::fabs(pos.x - g.titlePos.x) < 1.f && std::fabs(pos.y - g.titlePos.y) < 1.f;
+            if (over && still && unmoved && !g.scrolled) {
+                ImGui::SetWindowCollapsed(!ImGui::IsWindowCollapsed(), ImGuiCond_Always);
+            }
         }
     }
 
@@ -499,32 +537,79 @@ namespace {
         ImGui::PopID();
     }
 
-    void drawKeybindRow() {
-        auto& keybinds = NXR::Keybinds::get();
-        std::string text;
-        if (keybinds.isRecordingCustom(kOpenMenuBind)) {
-            text = "Press a key...";
-        } else {
-            const auto bind = keybinds.getBind(kOpenMenuBind);
-            text = bind.key == cocos2d::KEY_None ? std::string("None") : bind.toString();
-        }
+    std::string bindText(const geode::Keybind& bind, bool recording) {
+        if (recording) return "Press a key...";
+        return bind.key == cocos2d::KEY_None ? std::string("None") : bind.toString();
+    }
 
+    void bindButtons(const std::string& text, bool recording, std::function<void()> onSet, std::function<void()> onClear) {
         const float gap = ImGui::GetStyle().ItemSpacing.x;
         const float clearW = ImGui::CalcTextSize("Clear").x + ImGui::GetStyle().FramePadding.x * 2.f;
         const float keyW = std::max(1.f, ImGui::GetContentRegionAvail().x - clearW - gap);
 
-        ImGui::PushID("openkey");
-        if (tapButton(text.c_str(), ImVec2(keyW, 0.f), false)) {
-            deferMain([] { NXR::Keybinds::get().startRecordingCustom(kOpenMenuBind); });
-        }
+        if (tapButton(text.c_str(), ImVec2(keyW, 0.f), recording)) deferMain(std::move(onSet));
         ImGui::SameLine();
-        if (tapButton("Clear", ImVec2(0.f, 0.f), false)) {
-            deferMain([] {
+        if (tapButton("Clear", ImVec2(0.f, 0.f), false)) deferMain(std::move(onClear));
+    }
+
+    void drawKeybindRow() {
+        auto& keybinds = NXR::Keybinds::get();
+        const bool recording = keybinds.isRecordingCustom(kOpenMenuBind);
+        ImGui::PushID("openkey");
+        bindButtons(bindText(keybinds.getBind(kOpenMenuBind), recording), recording,
+            [] { NXR::Keybinds::get().startRecordingCustom(kOpenMenuBind); },
+            [] {
                 NXR::Keybinds::get().stopRecording();
                 NXR::Keybinds::get().clearCustomBind(kOpenMenuBind);
             });
-        }
         ImGui::PopID();
+    }
+
+    void drawKeybindBody() {
+        auto& keybinds = NXR::Keybinds::get();
+
+        ImGui::PushTextWrapPos(0.f);
+        ImGui::TextDisabled("Tap a key button, then press a key. That key toggles the feature without opening the menu. Esc or Clear removes it");
+        ImGui::PopTextWrapPos();
+        ImGui::Spacing();
+
+        for (auto& window : NXR::Gui::get().getWindows()) {
+            if (window.getHacks().empty()) continue;
+            const std::string name = window.getName();
+            if (!ImGui::CollapsingHeader((name + "###kbwin:" + name).c_str())) continue;
+
+            for (auto& hack : window.getHacks()) {
+                const std::string hackName = hack.getName();
+                const bool recording = keybinds.isRecording(name, hackName);
+                ImGui::PushID(hack.getID().c_str());
+                ImGui::TextUnformatted(hackName.c_str());
+                bindButtons(bindText(hack.getKeybind(), recording), recording,
+                    [name, hackName] { NXR::Keybinds::get().startRecording(name, hackName); },
+                    [name, hackName] {
+                        NXR::Keybinds::get().stopRecording();
+                        NXR::Keybinds::get().clearHackBind(name, hackName);
+                    });
+                ImGui::PopID();
+            }
+        }
+
+#ifdef GEODE_IS_DESKTOP
+        const auto actions = keybinds.customActions();
+        if (!actions.empty() && ImGui::CollapsingHeader("Actions###kbactions")) {
+            for (const auto& [id, label] : actions) {
+                const bool recording = keybinds.isRecordingCustom(id);
+                ImGui::PushID(id.c_str());
+                ImGui::TextUnformatted(label.c_str());
+                bindButtons(bindText(keybinds.getBind(id), recording), recording,
+                    [id] { NXR::Keybinds::get().startRecordingCustom(id); },
+                    [id] {
+                        NXR::Keybinds::get().stopRecording();
+                        NXR::Keybinds::get().clearCustomBind(id);
+                    });
+                ImGui::PopID();
+            }
+        }
+#endif
     }
 
     void drawSettingsBody() {
@@ -541,6 +626,17 @@ namespace {
 
         ImGui::TextUnformatted("Open Menu Key");
         drawKeybindRow();
+        form.addSeparator();
+
+        ImGui::TextUnformatted("Hack Settings Popup");
+        const int popupMode = NXR::Imgui::choice({"Popup", "Clean"}, NXR::Ui::settingsPopup());
+        if (popupMode >= 0 && popupMode != NXR::Ui::settingsPopup()) {
+            config.set<int>(NXR::Ui::kSettingsPopupKey, popupMode);
+            g.settings.clear();
+        }
+        ImGui::PushTextWrapPos(0.f);
+        ImGui::TextDisabled("Popup: window with title bar, arrow and X. Clean: only the options, tap empty space to close");
+        ImGui::PopTextWrapPos();
         form.addSeparator();
 
         ImGui::TextUnformatted("Theme");
@@ -563,6 +659,8 @@ namespace {
     }
 
     void drawHackSettingsWindows() {
+        const bool clean = NXR::Ui::settingsPopup() == NXR::Ui::Clean;
+
         for (size_t i = 0; i < g.settings.size();) {
             NXR::Hack* hack = g.settings[i];
             const std::string title = hack->getName() + " Settings###settings:" + hack->getID();
@@ -573,10 +671,14 @@ namespace {
             ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.f), ImVec2(width, io.DisplaySize.y * 0.88f));
             g.sliderActive = false;
-            if (ImGui::Begin(title.c_str(), &open, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings)) {
+
+            ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+            if (clean) flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse;
+
+            if (ImGui::Begin(title.c_str(), clean ? nullptr : &open, flags)) {
                 g_form.begin();
                 hack->callForm(g_form);
-                touchScroll();
+                touchScroll(!clean);
             }
             ImGui::End();
 
@@ -585,6 +687,10 @@ namespace {
             } else {
                 g.settings.erase(g.settings.begin() + static_cast<std::ptrdiff_t>(i));
             }
+        }
+
+        if (clean && !g.settings.empty() && ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+            g.settings.clear();
         }
     }
 
@@ -609,6 +715,7 @@ namespace {
                     window.drawImguiPanel();
                     touchScroll();
                 }
+                titleTap();
                 ImGui::End();
                 slot++;
             }
@@ -620,15 +727,26 @@ namespace {
                 for (auto& hack : window.getHacks()) drawHackRow(hack);
                 touchScroll();
             }
+            titleTap();
             ImGui::End();
             slot++;
         }
+
+        if (beginWindow("Keybind###keybind", slot)) {
+            g_form.begin();
+            drawKeybindBody();
+            touchScroll();
+        }
+        titleTap();
+        ImGui::End();
+        slot++;
 
         if (beginWindow("Settings###settings", slot)) {
             g_form.begin();
             drawSettingsBody();
             touchScroll();
         }
+        titleTap();
         ImGui::End();
 
         drawHackSettingsWindows();
@@ -660,6 +778,7 @@ void NXR::Imgui::holdFor(cocos2d::CCNode* node) {
 void NXR::Imgui::openHackSettings(NXR::Hack& hack) {
     if (!hack.hasForm()) return;
     if (!g.open) g.open = true;
+    if (NXR::Ui::settingsPopup() == NXR::Ui::Clean) g.settings.clear();
     if (std::find(g.settings.begin(), g.settings.end(), &hack) == g.settings.end()) g.settings.push_back(&hack);
 }
 
