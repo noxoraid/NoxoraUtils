@@ -11,9 +11,9 @@
 #include "../../core/nxr_level_stats.hpp"
 #include "nxr_text_style.hpp"
 
-NXRNamePopup* NXRNamePopup::create(const std::string& title, geode::Function<void(const std::string&)> onConfirm) {
+NXRNamePopup* NXRNamePopup::create(const std::string& title, geode::Function<void(const std::string&)> onConfirm, const std::string& initial) {
     auto ret = new NXRNamePopup();
-    if (ret->init(title, std::move(onConfirm))) {
+    if (ret->init(title, std::move(onConfirm), initial)) {
         ret->autorelease();
         return ret;
     }
@@ -21,7 +21,7 @@ NXRNamePopup* NXRNamePopup::create(const std::string& title, geode::Function<voi
     return nullptr;
 }
 
-bool NXRNamePopup::init(const std::string& title, geode::Function<void(const std::string&)> onConfirm) {
+bool NXRNamePopup::init(const std::string& title, geode::Function<void(const std::string&)> onConfirm, const std::string& initial) {
     if (!geode::Popup::init(280.f, 150.f, NXR::Theme::square())) return false;
 
     m_onConfirm = std::move(onConfirm);
@@ -47,6 +47,10 @@ bool NXRNamePopup::init(const std::string& title, geode::Function<void(const std
     input->setCallback([this](const std::string& str) {
         m_text = str;
     });
+    if (!initial.empty()) {
+        input->setString(initial);
+        m_text = initial;
+    }
     m_mainLayer->addChild(input);
 
     auto okSprite = ButtonSprite::create("OK", 90, true, "GoogleSans.fnt"_spr, NXR::Theme::button(), 26.f, 0.7f);

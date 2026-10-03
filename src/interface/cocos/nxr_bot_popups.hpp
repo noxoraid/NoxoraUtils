@@ -11,10 +11,10 @@ protected:
     std::string m_text;
     geode::Function<void(const std::string&)> m_onConfirm;
 
-    bool init(const std::string& title, geode::Function<void(const std::string&)> onConfirm);
+    bool init(const std::string& title, geode::Function<void(const std::string&)> onConfirm, const std::string& initial);
 
 public:
-    static NXRNamePopup* create(const std::string& title, geode::Function<void(const std::string&)> onConfirm);
+    static NXRNamePopup* create(const std::string& title, geode::Function<void(const std::string&)> onConfirm, const std::string& initial = "");
 };
 
 class NXRReplayInfoPopup : public geode::Popup {

@@ -1,3 +1,11 @@
+# v1.4.11
+
+- **Removed:** the nxr_log_macro folder is no longer created.
+- **New:** "Global" tab with Speedhack (0.01 - 1000, gameplay and audio, mod menu unaffected), Safe Mode (wins and progress are not counted), Click Between Frames (built in, no other mod needed), Auto Sync Music (music follows the gameplay when the game lags or slows down) and Super Fast Practice Click (Practice mode, press 1 to spam checkpoints, delay 0 - 10000 ms).
+- **New:** Bot "New" now fills the file name with the level name (adds _2, _3 if it already exists). Press OK or edit the name first.
+- **New:** Bot "Rename" button to rename any saved replay.
+- **Fix:** float inputs now show small values like 0.01 correctly.
+
 # v1.4.10
 
 - **Fix:** Clean popup mode no longer closes when you touch or drag the popup itself on mobile. It now only closes when you tap empty space outside every window.

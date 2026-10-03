@@ -1,4 +1,5 @@
 #include <Geode/Geode.hpp>
+#include <Geode/modify/PlayLayer.hpp>
 #include <algorithm>
 #include <cmath>
 #include "../../core/nxr_gui.hpp"
@@ -228,6 +229,90 @@ namespace {
         } else {
             notify("Failed to delete replay", geode::NotificationIcon::Error);
         }
+    }
+
+
+    std::string g_lastLevel;
+
+    std::string fileSafe(const std::string& raw) {
+        std::string out;
+        for (char c : raw) {
+            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.' || c == ' ') out.push_back(c);
+        }
+        while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
+        while (!out.empty() && out.front() == ' ') out.erase(out.begin());
+        if (out.size() > 40) out.resize(40);
+        while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
+        return out;
+    }
+
+    std::string suggestedName() {
+        std::string base;
+
+        if (auto* pl = PlayLayer::get(); pl && pl->m_level) base = fileSafe(pl->m_level->m_levelName);
+        if (base.empty()) base = fileSafe(g_lastLevel);
+        if (base.empty()) base = fileSafe(State::get().current.levelName);
+        if (base.empty()) base = fileSafe(NXRConfig::get().get<std::string>("nxr.bot.last_level", ""));
+        if (base.empty()) base = "replay";
+
+        std::error_code ec;
+        if (!std::filesystem::exists(macroPathFor(base), ec)) return base;
+
+        for (int i = 2; i < 1000; i++) {
+            const std::string candidate = fmt::format("{}_{}", base, i);
+            if (!std::filesystem::exists(macroPathFor(candidate), ec)) return candidate;
+        }
+        return base;
+    }
+
+    bool renameReplayByName(const std::string& oldName, const std::string& raw) {
+        const std::string name = cleanName(raw);
+        if (name.empty()) {
+            notify("Enter a file name", geode::NotificationIcon::Warning);
+            return false;
+        }
+        if (name == oldName) return true;
+
+        flushAsyncSaves();
+
+        std::error_code ec;
+        const auto from = macroPathFor(oldName);
+        const auto to = macroPathFor(name);
+
+        if (!std::filesystem::exists(from, ec)) {
+            notify("Replay not found", geode::NotificationIcon::Error);
+            return false;
+        }
+        if (std::filesystem::exists(to, ec)) {
+            notify(fmt::format("\"{}\" already exists", name), geode::NotificationIcon::Warning);
+            return false;
+        }
+
+        std::filesystem::rename(from, to, ec);
+        if (ec) {
+            notify("Failed to rename replay", geode::NotificationIcon::Error);
+            return false;
+        }
+
+        const auto jsonFrom = macroJsonPathFor(oldName);
+        if (std::filesystem::exists(jsonFrom, ec)) std::filesystem::rename(jsonFrom, macroJsonPathFor(name), ec);
+
+        auto& st = State::get();
+        if (st.selectedReplay == oldName) st.selectedReplay = name;
+        if (st.current.name == oldName) st.current.name = name;
+
+        notify(fmt::format("Renamed to \"{}\"", name), geode::NotificationIcon::Success);
+        return true;
+    }
+
+    void startNewFlow() {
+        NXR::Ui::showPopup(NXRNamePopup::create("New Replay", [](const std::string& name) { createReplay(name); }, suggestedName()), "New Replay");
+    }
+
+    void startRenameFlow() {
+        NXR::Ui::pickReplay("Rename Replay", "Rename", [](const std::string& oldName) {
+            NXR::Ui::showPopup(NXRNamePopup::create("Rename Replay", [oldName](const std::string& name) { renameReplayByName(oldName, name); }, oldName), "Rename Replay");
+        });
     }
 
     struct RateTracker {
@@ -515,9 +600,7 @@ namespace {
         ImGui::TextWrapped("%s", rateText().c_str());
         ImGui::Spacing();
 
-        pairRow("New", [] {
-            NXR::Ui::showPopup(NXRNamePopup::create("New Replay", [](const std::string& name) { createReplay(name); }), "New Replay");
-        }, "Save", [] { saveReplay(); });
+        pairRow("New", [] { startNewFlow(); }, "Save", [] { saveReplay(); });
 
         pairRow("Load", [] {
             NXR::Ui::pickReplay("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); });
@@ -525,11 +608,15 @@ namespace {
             NXR::Ui::pickReplay("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); });
         });
 
-        pairRow("Restore Autosave", [] { restoreAutosave(); }, "Browse Replays", [] { openBrowser(); });
+        pairRow("Rename", [] { startRenameFlow(); }, "Restore Autosave", [] { restoreAutosave(); });
 
-        pairRow("Merge Replays", [] { startMergeFlow(); }, "Export JSON", [] {
-            NXR::Ui::pickReplay("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); });
-        });
+        pairRow("Browse Replays", [] { openBrowser(); }, "Merge Replays", [] { startMergeFlow(); });
+
+        if (NXR::Imgui::button("Export JSON", -1.f)) {
+            NXR::Imgui::later([] {
+                NXR::Ui::pickReplay("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); });
+            });
+        }
     }
 }
 
@@ -634,12 +721,7 @@ $execute {
         tab->m_currentRow->addChild(BotInfoNode::create(1));
         tab->m_currentRow->updateLayout();
 
-        tab->addConfigButton(
-            "New", []{
-                NXR::Ui::showPopup(NXRNamePopup::create("New Replay", [](const std::string& name) { createReplay(name); }), "New Replay");
-            },
-            "Save", []{ saveReplay(); }
-        );
+        tab->addConfigButton("New", []{ startNewFlow(); }, "Save", []{ saveReplay(); });
         tab->addConfigButton(
             "Load", []{
                 NXR::Ui::showPopup(NXRReplayPickerPopup::create("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); }), "Load Replay");
@@ -648,13 +730,11 @@ $execute {
                 NXR::Ui::showPopup(NXRReplayPickerPopup::create("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); }), "Delete Replay");
             }
         );
-        tab->addConfigButton("Restore Last Autosave", []{ restoreAutosave(); }, "Browse Replays", []{ openBrowser(); });
-        tab->addConfigButton(
-            "Merge Replays", []{ startMergeFlow(); },
-            "Export JSON", []{
-                NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
-            }
-        );
+        tab->addConfigButton("Rename", []{ startRenameFlow(); }, "Restore Last Autosave", []{ restoreAutosave(); });
+        tab->addConfigButton("Browse Replays", []{ openBrowser(); }, "Merge Replays", []{ startMergeFlow(); });
+        tab->addConfigButton("Export JSON", []{
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
+        });
         tab->addPadding(6.f);
     });
     auto& keybinds = NXR::Keybinds::get();
@@ -678,3 +758,12 @@ $execute {
     });
 
 }
+
+class $modify(NXRBotLevelNamePlayLayer, PlayLayer) {
+    void setupHasCompleted() {
+        PlayLayer::setupHasCompleted();
+        if (!m_level) return;
+        g_lastLevel = m_level->m_levelName;
+        NXRConfig::get().set<std::string>("nxr.bot.last_level", g_lastLevel);
+    }
+};

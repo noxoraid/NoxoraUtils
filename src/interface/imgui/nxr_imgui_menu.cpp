@@ -455,7 +455,7 @@ namespace {
 #endif
             const float step = range > 100.f ? 1.f : (range > 10.f ? 0.1f : 0.01f);
             const float speed = std::max(step * 0.5f, range / 300.f);
-            ImGui::DragFloat("##value", &value, speed, min, max, range >= 100.f ? "%.1f" : "%.2f", flags);
+            ImGui::DragFloat("##value", &value, speed, min, max, value < 1.f ? "%.3f" : (range >= 100.f ? "%.1f" : "%.2f"), flags);
             g.sliderActive = g.sliderActive || ImGui::IsItemActive();
 
             ImGui::SameLine();
