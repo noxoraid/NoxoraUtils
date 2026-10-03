@@ -1,3 +1,15 @@
+# v1.4.10
+
+- **Fix:** Clean popup mode no longer closes when you touch or drag the popup itself on mobile. It now only closes when you tap empty space outside every window.
+
+# v1.4.9
+
+- **Fix:** Wave Trail Fix, the last thin line is now removed completely. Before every trail redraw it drops points closer than 3 units, points that make a sharp U-turn spike, and points that go backwards in X (not in platformer levels), which are what drew the stray line.
+
+# v1.4.8
+
+- **Fix:** Windows, macOS and Android64 build error in the Wave Trail Fix (ambiguous CCPoint assignment).
+
 # v1.4.7
 
 - **Fix:** Wave Trail Fix, thin line that still appeared while sliding on blocks. The trail now merges points closer than 1.5 units and is cleaned before every redraw, and the head segment can no longer have zero length. A corner is only added by the fix when the game has not already placed one right there.

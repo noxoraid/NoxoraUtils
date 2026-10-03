@@ -711,6 +711,16 @@ namespace {
         g.rects = g.nextRects;
     }
 
+    bool mouseOverRects(const ImVec2& p) {
+        for (const auto& r : g.rects) {
+            if (p.x >= r[0] && p.x <= r[2] && p.y >= r[1] && p.y <= r[3]) return true;
+        }
+        for (const auto& r : g.nextRects) {
+            if (p.x >= r[0] && p.x <= r[2] && p.y >= r[1] && p.y <= r[3]) return true;
+        }
+        return false;
+    }
+
     std::string replayInfoText(const std::string& name) {
         NXR::Bot::Macro macro;
         if (!NXR::Bot::loadMacro(macro, NXR::Bot::macroPathFor(name))) return "Failed to read this replay";
@@ -909,7 +919,8 @@ namespace {
         drawPickerWindows();
 
         if (NXR::Ui::settingsPopup() == NXR::Ui::Clean && (!g.settings.empty() || !g.pickers.empty())
-            && ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+            && ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)
+            && !mouseOverRects(ImGui::GetIO().MousePos)) {
             g.settings.clear();
             g.pickers.clear();
         }
