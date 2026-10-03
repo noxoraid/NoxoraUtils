@@ -193,16 +193,16 @@ class $modify(NXRWaveTrailGuardHardStreak, HardStreak) {
             return;
         }
 
-        CCPoint dir = {1.f, 0.f};
+        CCPoint dir = CCPoint(1.f, 0.f);
         auto* arr = m_pointArray;
         if (arr && arr->count() >= 2) {
             const CCPoint prev = nodeAt(arr, static_cast<int>(arr->count()) - 2)->m_point;
             const float len = dist(tail, prev);
-            if (len > 0.0001f) dir = {(tail.x - prev.x) / len, (tail.y - prev.y) / len};
+            if (len > 0.0001f) dir = CCPoint((tail.x - prev.x) / len, (tail.y - prev.y) / len);
         }
 
         const CCPoint saved = m_currentPoint;
-        m_currentPoint = {tail.x + dir.x * kHeadNudge, tail.y + dir.y * kHeadNudge};
+        m_currentPoint = CCPoint(tail.x + dir.x * kHeadNudge, tail.y + dir.y * kHeadNudge);
         HardStreak::updateStroke(dt);
         m_currentPoint = saved;
     }
