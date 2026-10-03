@@ -49,6 +49,7 @@ class $modify(NXROverlayButtonVisiblityPL, PlayLayer) {
     void onQuit() {
         NXR::Ui::closeMenu();
         PlayLayer::onQuit();
+        NXROverlayButton::get()->setVisible(true);
     }
 
     void showEndLayer() {

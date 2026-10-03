@@ -42,8 +42,8 @@ class $modify(NXRPracticeClickPlayLayer, PlayLayer) {
         });
     }
 
-    void update(float dt) {
-        PlayLayer::update(dt);
+    void postUpdate(float dt) {
+        PlayLayer::postUpdate(dt);
 
         if (!enabled() || !active()) return;
 

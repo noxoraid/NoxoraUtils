@@ -29,6 +29,10 @@ namespace {
     double g_sync = 1.0;
     double g_accAdvance = 0.0;
     double g_accReal = 0.0;
+    double g_baseOffset = 0.0;
+    bool g_hasBase = false;
+    double g_drift = 0.0;
+    double g_hardCooldown = 0.0;
     float g_lastPitch = 1.f;
     bool g_pitchDirty = false;
 
@@ -44,14 +48,22 @@ namespace {
         return pl && !pl->m_isPaused && !pl->m_levelEndAnimationStarted;
     }
 
+    void setGroupPitch(FMOD::ChannelGroup* group, float pitch) {
+        if (!group) return;
+        float current = 1.f;
+        if (group->getPitch(&current) == FMOD_OK && std::fabs(current - pitch) <= 0.0005f && !g_pitchDirty) return;
+        group->setPitch(pitch);
+    }
+
     void applyPitch(float pitch) {
         pitch = std::clamp(pitch, 0.01f, 10.f);
-        if (std::fabs(pitch - g_lastPitch) < 0.0005f && !g_pitchDirty) return;
 
         auto* engine = FMODAudioEngine::sharedEngine();
-        if (!engine || !engine->m_globalChannel) return;
+        if (!engine) return;
 
-        engine->m_globalChannel->setPitch(pitch);
+        setGroupPitch(engine->m_backgroundMusicChannel, pitch);
+        setGroupPitch(engine->m_globalChannel, pitch);
+
         g_lastPitch = pitch;
         g_pitchDirty = false;
     }
@@ -63,7 +75,8 @@ namespace {
         if (!active) return 1.f;
 
         if (syncOn()) {
-            return static_cast<float>(std::clamp(g_sync, 0.01, 10.0));
+            const double correction = std::clamp(g_drift / 1000.0, -0.25, 0.25);
+            return static_cast<float>(std::clamp(g_sync * (1.0 - correction * 2.0), 0.01, 10.0));
         }
 
         if (speedOn() && audio) return static_cast<float>(speedValue());
@@ -88,6 +101,8 @@ class $modify(NXRSpeedScheduler, cocos2d::CCScheduler) {
             g_sync = 1.0;
             g_accAdvance = 0.0;
             g_accReal = 0.0;
+            g_hasBase = false;
+            g_drift = 0.0;
             g_pitchDirty = true;
         });
     }
@@ -102,7 +117,7 @@ class $modify(NXRSpeedScheduler, cocos2d::CCScheduler) {
 
         CCScheduler::update(scaled);
 
-        if (speedOn() || syncOn() || g_lastPitch != 1.f) {
+        if (speedOn() || syncOn() || std::fabs(g_lastPitch - 1.f) > 0.0005f) {
             applyPitch(targetPitch());
         }
     }
@@ -119,28 +134,58 @@ class $modify(NXRSyncBaseGameLayer, GJBaseGameLayer) {
             g_sync = 1.0;
             g_accAdvance = 0.0;
             g_accReal = 0.0;
+            g_hasBase = false;
+            g_drift = 0.0;
             return;
         }
 
-        const double advanced = m_gameState.m_levelTime - before;
-        if (advanced < 0.0 || advanced / g_realDt > 50.0) {
+        const double now = m_gameState.m_levelTime;
+        const double advanced = now - before;
+
+        if (advanced < -0.0001 || advanced > 1.0) {
             g_accAdvance = 0.0;
             g_accReal = 0.0;
+            g_hasBase = false;
+            g_drift = 0.0;
             return;
         }
 
         g_accAdvance += advanced;
         g_accReal += g_realDt;
 
-        if (g_accReal < 0.3) return;
+        if (g_accReal >= 0.12) {
+            double ratio = g_accAdvance / g_accReal;
+            g_accAdvance = 0.0;
+            g_accReal = 0.0;
 
-        double ratio = g_accAdvance / g_accReal;
-        g_accAdvance = 0.0;
-        g_accReal = 0.0;
+            const double reference = speedOn() ? speedValue() : 1.0;
+            if (std::fabs(ratio - reference) < reference * 0.02) ratio = reference;
 
-        const double reference = speedOn() ? speedValue() : 1.0;
-        if (std::fabs(ratio - reference) < reference * 0.03) ratio = reference;
+            g_sync = g_sync * 0.5 + ratio * 0.5;
+        }
 
-        g_sync = ratio;
+        auto* engine = FMODAudioEngine::sharedEngine();
+        if (!engine || now < 0.4) return;
+
+        const double levelMs = now * 1000.0;
+        const double musicMs = static_cast<double>(engine->getMusicTimeMS(0));
+        const double offset = musicMs - levelMs;
+
+        if (!g_hasBase) {
+            g_baseOffset = offset;
+            g_hasBase = true;
+            g_drift = 0.0;
+            return;
+        }
+
+        g_drift = offset - g_baseOffset;
+        g_hardCooldown -= g_realDt;
+
+        if (std::fabs(g_drift) > 250.0 && g_hardCooldown <= 0.0) {
+            const double target = levelMs + g_baseOffset;
+            if (target > 0.0) engine->setMusicTimeMS(static_cast<unsigned int>(target), true, 0);
+            g_hardCooldown = 1.0;
+            g_drift = 0.0;
+        }
     }
 };

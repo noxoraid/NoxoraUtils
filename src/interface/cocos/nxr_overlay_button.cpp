@@ -45,8 +45,7 @@ bool NXROverlayButton::init(const char* file) {
     setPosition({0, 0});
     scheduleUpdate();
 
-    bool isVisible = config.get<bool>("nxr.ui_icon.visible", true);
-    this->setVisible(isVisible);
+    CCMenu::setVisible(true);
 
     return true;
 }
@@ -60,19 +59,14 @@ void NXROverlayButton::setSizeScale(float scale) {
 }
 
 void NXROverlayButton::setVisible(bool visible) {
-    if (isVisible() == visible) return;
-
     CCMenu::setVisible(visible);
 
-    if (auto dispatcher = CCDirector::sharedDirector()->getTouchDispatcher()) {
-        if (visible) {
-            dispatcher->addTargetedDelegate(this, -1000, true);
-        } else {
-            dispatcher->removeDelegate(this);
-        }
-    }
+    if (!isRunning()) return;
 
-    NXRConfig::get().set<bool>("nxr.ui_icon.visible", visible);
+    if (auto dispatcher = CCDirector::sharedDirector()->getTouchDispatcher()) {
+        dispatcher->removeDelegate(this);
+        if (visible) dispatcher->addTargetedDelegate(this, -1000, true);
+    }
 }
 
 void NXROverlayButton::update(float dt) {
@@ -141,6 +135,9 @@ static bool inited = false;
 class $modify(NXRCocosInitMenuLayer, MenuLayer) {
     bool init() {
         if (!MenuLayer::init()) return false;
+        if (inited && NXROverlayButton::instance) {
+            NXROverlayButton::instance->setVisible(true);
+        }
         if (!inited) {
             inited = true;
             auto button = NXROverlayButton::get();

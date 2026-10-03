@@ -1,3 +1,13 @@
+# v1.4.12
+
+- **Fix:** the overlay button no longer disappears after restarting the game. Its hidden state was being saved to the config, now it is never saved and it always comes back on the menu.
+- **Fix:** Speedhack audio now sets the pitch on the music and global channels every frame.
+- **Fix:** Super Fast Practice Click was hooked on a function that does not exist in PlayLayer, so it never ran. It now runs from postUpdate.
+- **Change:** Click Between Frames now has 3 modes: Low, High, Extreme (frames and input merged into one hack).
+- **New:** Safe Mode shows "It's safe mode" when you finish a level.
+- **Fix:** New and Save in the bot no longer wipe an unsaved recording. Save without a file name asks for a name (pre-filled with the level name) and keeps the recording.
+- **Change:** Auto Sync Music now also corrects drift against the real music time and re-seeks the music if it drifts more than 250 ms.
+
 # v1.4.11
 
 - **Removed:** the nxr_log_macro folder is no longer created.

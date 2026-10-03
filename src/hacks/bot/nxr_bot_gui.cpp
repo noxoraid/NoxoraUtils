@@ -47,6 +47,22 @@ namespace {
     constexpr const char* kIndHudInfoKey = "nxr.bot.click_indicator::hud_info";
     constexpr const char* kIndHideStatsKey = "nxr.bot.click_indicator::hide_stats";
     constexpr const char* kSaveJsonKey = "nxr.bot.save_json";
+    size_t g_savedEvents = 0;
+    uint64_t g_savedFrames = 0;
+
+    bool hasUnsavedRecording() {
+        auto& st = State::get();
+        if (st.current.events.empty()) return false;
+        if (st.selectedReplay.empty()) return true;
+        return st.current.events.size() != g_savedEvents
+            || static_cast<uint64_t>(st.current.totalFrames) != g_savedFrames;
+    }
+
+    void markSaved() {
+        auto& st = State::get();
+        g_savedEvents = st.current.events.size();
+        g_savedFrames = static_cast<uint64_t>(st.current.totalFrames);
+    }
     constexpr const char* kRecordHereKey = "nxr.bot.record_here";
     constexpr const char* kAutosaveKey = "nxr.bot.autosave";
     constexpr const char* kAutosaveWinKey = "nxr.bot.autosave_win";
@@ -152,22 +168,52 @@ namespace {
 
         auto& st = State::get();
         st.stop();
-        st.current.clear();
+
+        const bool keep = hasUnsavedRecording();
+
+        if (keep) {
+            std::error_code ec;
+            if (std::filesystem::exists(macroPathFor(name), ec)) {
+                notify(fmt::format("\"{}\" already exists, pick another name", name), geode::NotificationIcon::Warning);
+                return false;
+            }
+        } else {
+            st.current.clear();
+        }
+
         st.current.name = name;
         st.selectedReplay = name;
+        if (!st.current.events.empty()) {
+            st.current.totalFrames = std::max(st.current.totalFrames, st.current.events.back().frame());
+        }
+
         if (!saveMacro(st.current, macroPathFor(name))) {
             st.selectedReplay.clear();
             notify("Failed to create replay file", geode::NotificationIcon::Error);
             return false;
         }
-        notify(fmt::format("New replay \"{}\"", name), geode::NotificationIcon::Info);
+        markSaved();
+
+        if (keep) {
+            if (NXRConfig::get().get<bool>(kSaveJsonKey, false)) saveMacroJson(st.current, macroJsonPathFor(name));
+            notify(fmt::format("Saved recording as \"{}\" ({} actions, {} frames)", name, st.current.events.size(), st.current.totalFrames), geode::NotificationIcon::Success);
+            deleteMacro("_autosave");
+        } else {
+            notify(fmt::format("New replay \"{}\"", name), geode::NotificationIcon::Info);
+        }
         return true;
     }
+
+    void startNewFlow();
 
     void saveReplay() {
         auto& st = State::get();
         if (st.selectedReplay.empty()) {
-            notify("Press New and enter a file name first", geode::NotificationIcon::Warning);
+            if (st.current.events.empty()) {
+                notify("Nothing recorded yet", geode::NotificationIcon::Warning);
+                return;
+            }
+            startNewFlow();
             return;
         }
 
@@ -177,6 +223,7 @@ namespace {
         }
         const auto path = macroPathFor(st.selectedReplay);
         if (saveMacro(st.current, path)) {
+            markSaved();
             if (NXRConfig::get().get<bool>(kSaveJsonKey, false)) saveMacroJson(st.current, macroJsonPathFor(st.selectedReplay));
             notify(fmt::format("Saved \"{}\" ({} actions, {} frames)", st.selectedReplay, st.current.events.size(), st.current.totalFrames), geode::NotificationIcon::Success);
 
@@ -195,6 +242,7 @@ namespace {
             st.current.name = name;
             st.selectedReplay = name;
             st.resetRun();
+            markSaved();
             notify(fmt::format("Loaded \"{}\" ({} actions, {} frames)", name, st.current.events.size(), st.current.totalFrames), geode::NotificationIcon::Success);
         } else {
             notify("Failed to load replay", geode::NotificationIcon::Error);

@@ -33,6 +33,32 @@ class $modify(NXRSafeModePlayLayer, PlayLayer) {
         m_isTestMode = true;
         PlayLayer::levelComplete();
         m_isTestMode = previous;
+
+        showBanner();
+    }
+
+    void showBanner() {
+        auto* scene = cocos2d::CCDirector::sharedDirector()->getRunningScene();
+        if (!scene) return;
+
+        scene->removeChildByID("nxr-safe-mode-banner"_spr);
+
+        const auto win = cocos2d::CCDirector::sharedDirector()->getWinSize();
+
+        auto* label = cocos2d::CCLabelBMFont::create("It's safe mode", "bigFont.fnt");
+        label->setID("nxr-safe-mode-banner"_spr);
+        label->setScale(0.9f);
+        label->setColor({255, 90, 90});
+        label->setPosition({win.width * 0.5f, win.height - 40.f});
+        label->setOpacity(0);
+        label->runAction(cocos2d::CCSequence::create(
+            cocos2d::CCFadeTo::create(0.2f, 255),
+            cocos2d::CCDelayTime::create(5.f),
+            cocos2d::CCFadeTo::create(0.5f, 0),
+            cocos2d::CCRemoveSelf::create(),
+            nullptr
+        ));
+        scene->addChild(label, 100000);
     }
 };
 
