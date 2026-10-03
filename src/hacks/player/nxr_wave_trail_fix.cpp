@@ -27,7 +27,8 @@ namespace {
 
     constexpr float kMoveEps = 0.01f;
     constexpr float kJumpDist = 100.f;
-    constexpr float kMerge = 1.5f;
+    constexpr float kMerge = 3.f;
+    constexpr float kSpikeCos = -0.9f;
     constexpr float kCornerGap = 8.f;
     constexpr float kHeadNudge = 0.75f;
 
@@ -67,6 +68,11 @@ namespace {
         g_track[1].reset();
     }
 
+    bool platformerLevel() {
+        auto* pl = PlayLayer::get();
+        return pl && pl->m_level && pl->m_level->isPlatformer();
+    }
+
     void sanitize(HardStreak* streak) {
         auto* arr = streak->m_pointArray;
         if (!arr) return;
@@ -78,6 +84,28 @@ namespace {
             }
             if (i >= 1 && dist(nodeAt(arr, i)->m_point, nodeAt(arr, i - 1)->m_point) < kMerge) {
                 arr->removeObjectAtIndex(i);
+            }
+        }
+
+        for (int i = static_cast<int>(arr->count()) - 2; i >= 1; i--) {
+            const CCPoint a = nodeAt(arr, i - 1)->m_point;
+            const CCPoint b = nodeAt(arr, i)->m_point;
+            const CCPoint c = nodeAt(arr, i + 1)->m_point;
+            const float l1 = dist(a, b);
+            const float l2 = dist(b, c);
+            if (l1 < 0.0001f || l2 < 0.0001f) continue;
+            const float cosine = ((b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y)) / (l1 * l2);
+            if (cosine < kSpikeCos) arr->removeObjectAtIndex(i);
+        }
+
+        if (arr->count() >= 2 && !platformerLevel()) {
+            const float span = nodeAt(arr, static_cast<int>(arr->count()) - 1)->m_point.x - nodeAt(arr, 0)->m_point.x;
+            if (std::fabs(span) > 1.f) {
+                const float dir = span > 0.f ? 1.f : -1.f;
+                for (int i = static_cast<int>(arr->count()) - 1; i >= 1; i--) {
+                    const float dx = nodeAt(arr, i)->m_point.x - nodeAt(arr, i - 1)->m_point.x;
+                    if (dx * dir < -0.01f) arr->removeObjectAtIndex(i);
+                }
             }
         }
     }
