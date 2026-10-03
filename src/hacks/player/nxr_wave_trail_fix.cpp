@@ -24,11 +24,12 @@ namespace {
     };
 
     WaveTrack g_track[2];
-    unsigned g_generation = 0;
 
     constexpr float kMoveEps = 0.01f;
     constexpr float kJumpDist = 100.f;
-    constexpr float kSamePoint = 0.01f;
+    constexpr float kMerge = 1.5f;
+    constexpr float kCornerGap = 8.f;
+    constexpr float kHeadNudge = 0.75f;
 
     bool fixEnabled() {
         return NXRConfig::get().get<bool>("nxr.bot.wave_trail_fix", true);
@@ -40,10 +41,45 @@ namespace {
         return 0;
     }
 
+    float dist(CCPoint a, CCPoint b) {
+        const float dx = a.x - b.x;
+        const float dy = a.y - b.y;
+        return std::sqrt(dx * dx + dy * dy);
+    }
+
+    bool finite(CCPoint p) {
+        return std::isfinite(p.x) && std::isfinite(p.y);
+    }
+
+    PointNode* nodeAt(CCArray* arr, int index) {
+        return static_cast<PointNode*>(arr->objectAtIndex(index));
+    }
+
+    bool lastPoint(HardStreak* streak, CCPoint& out) {
+        auto* arr = streak->m_pointArray;
+        if (!arr || arr->count() == 0) return false;
+        out = nodeAt(arr, static_cast<int>(arr->count()) - 1)->m_point;
+        return true;
+    }
+
     void resetAll() {
         g_track[0].reset();
         g_track[1].reset();
-        g_generation++;
+    }
+
+    void sanitize(HardStreak* streak) {
+        auto* arr = streak->m_pointArray;
+        if (!arr) return;
+
+        for (int i = static_cast<int>(arr->count()) - 1; i >= 0; i--) {
+            if (!finite(nodeAt(arr, i)->m_point)) {
+                arr->removeObjectAtIndex(i);
+                continue;
+            }
+            if (i >= 1 && dist(nodeAt(arr, i)->m_point, nodeAt(arr, i - 1)->m_point) < kMerge) {
+                arr->removeObjectAtIndex(i);
+            }
+        }
     }
 }
 
@@ -70,7 +106,7 @@ class $modify(NXRWaveTrailFixPlayerObject, PlayerObject) {
 
         const CCPoint pos = this->getPosition();
 
-        if (!std::isfinite(pos.x) || !std::isfinite(pos.y)) {
+        if (!finite(pos)) {
             track.reset();
             return;
         }
@@ -98,7 +134,11 @@ class $modify(NXRWaveTrailFixPlayerObject, PlayerObject) {
         if (sx == 0 && sy == 0) return;
 
         const bool turned = (track.sx != 0 || track.sy != 0) && (sx != track.sx || sy != track.sy);
-        if (turned) m_waveTrail->addPoint(track.last);
+        if (turned) {
+            CCPoint tail;
+            const bool covered = lastPoint(m_waveTrail, tail) && dist(tail, track.last) < kCornerGap;
+            if (!covered) m_waveTrail->addPoint(track.last);
+        }
 
         track.sx = sx;
         track.sy = sy;
@@ -120,33 +160,50 @@ class $modify(NXRWaveTrailFixPlayLayer, PlayLayer) {
 };
 
 class $modify(NXRWaveTrailGuardHardStreak, HardStreak) {
-    struct Fields {
-        CCPoint last = {0.f, 0.f};
-        unsigned generation = 0;
-        bool hasLast = false;
-    };
-
     void addPoint(CCPoint point) {
         if (!fixEnabled()) {
             HardStreak::addPoint(point);
             return;
         }
 
-        if (!std::isfinite(point.x) || !std::isfinite(point.y)) return;
+        if (!finite(point)) return;
 
-        auto fields = m_fields.self();
+        CCPoint tail;
+        if (lastPoint(this, tail) && dist(tail, point) < kMerge) return;
 
-        if (fields->generation != g_generation) {
-            fields->generation = g_generation;
-            fields->hasLast = false;
+        HardStreak::addPoint(point);
+    }
+
+    void updateStroke(float dt) {
+        if (!fixEnabled()) {
+            HardStreak::updateStroke(dt);
+            return;
         }
 
-        if (fields->hasLast
-            && std::fabs(fields->last.x - point.x) < kSamePoint
-            && std::fabs(fields->last.y - point.y) < kSamePoint) return;
+        sanitize(this);
 
-        fields->last = point;
-        fields->hasLast = true;
-        HardStreak::addPoint(point);
+        if (!finite(m_currentPoint)) {
+            HardStreak::updateStroke(dt);
+            return;
+        }
+
+        CCPoint tail;
+        if (!lastPoint(this, tail) || dist(tail, m_currentPoint) >= kMerge) {
+            HardStreak::updateStroke(dt);
+            return;
+        }
+
+        CCPoint dir = {1.f, 0.f};
+        auto* arr = m_pointArray;
+        if (arr && arr->count() >= 2) {
+            const CCPoint prev = nodeAt(arr, static_cast<int>(arr->count()) - 2)->m_point;
+            const float len = dist(tail, prev);
+            if (len > 0.0001f) dir = {(tail.x - prev.x) / len, (tail.y - prev.y) / len};
+        }
+
+        const CCPoint saved = m_currentPoint;
+        m_currentPoint = {tail.x + dir.x * kHeadNudge, tail.y + dir.y * kHeadNudge};
+        HardStreak::updateStroke(dt);
+        m_currentPoint = saved;
     }
 };

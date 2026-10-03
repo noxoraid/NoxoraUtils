@@ -1,3 +1,7 @@
+# v1.4.7
+
+- **Fix:** Wave Trail Fix, thin line that still appeared while sliding on blocks. The trail now merges points closer than 1.5 units and is cleaned before every redraw, and the head segment can no longer have zero length. A corner is only added by the fix when the game has not already placed one right there.
+
 # v1.4.6
 
 - **Fix:** Wave Trail Fix rewritten. It no longer adds a trail point every tick (that made zero-length segments and the thin lines fanning out behind the wave). Now a point is added only at a real corner, when the wave changes direction, at the exact corner position, so the trail stays a clean zigzag in record, playback and normal play. Duplicate, non-finite and stale points are still dropped, and the tracking resets on respawn and quit.
