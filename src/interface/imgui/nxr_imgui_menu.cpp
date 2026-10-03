@@ -1,6 +1,5 @@
 #include "nxr_imgui_menu.hpp"
 #include <imgui.h>
-#include <imgui_internal.h>
 #include <imgui-cocos.hpp>
 #include <Geode/modify/UILayer.hpp>
 #include <Geode/modify/EditorUI.hpp>
@@ -47,6 +46,7 @@ namespace {
     struct Runtime {
         bool open = false;
         std::vector<std::array<float, 4>> rects;
+        std::vector<std::array<float, 4>> nextRects;
         std::vector<Picker> pickers;
         int pickerSerial = 0;
         bool resetLayout = false;
@@ -680,19 +680,15 @@ namespace {
         if (NXR::Imgui::button("Reset Window Positions", -1.f)) g.resetLayout = true;
     }
 
-    void collectUiRects() {
-        g.rects.clear();
-        if (!g.open) return;
-
-        ImGuiContext* ctx = ImGui::GetCurrentContext();
-        if (!ctx) return;
-
+    void noteRect() {
+        const ImVec2 pos = ImGui::GetWindowPos();
+        const ImVec2 size = ImGui::GetWindowSize();
         const float pad = 4.f * g.uiScale;
-        for (ImGuiWindow* window : ctx->Windows) {
-            if (!window || !window->Active || window->Hidden) continue;
-            if (window->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_Tooltip)) continue;
-            g.rects.push_back({window->Pos.x - pad, window->Pos.y - pad, window->Pos.x + window->Size.x + pad, window->Pos.y + window->Size.y + pad});
-        }
+        g.nextRects.push_back({pos.x - pad, pos.y - pad, pos.x + size.x + pad, pos.y + size.y + pad});
+    }
+
+    void commitRects() {
+        g.rects = g.nextRects;
     }
 
     std::string replayInfoText(const std::string& name) {
@@ -784,6 +780,7 @@ namespace {
 
                 touchScroll(!clean);
             }
+            noteRect();
             ImGui::End();
 
             if (open && !done) {
@@ -816,6 +813,7 @@ namespace {
                 hack->callForm(g_form);
                 touchScroll(!clean);
             }
+            noteRect();
             ImGui::End();
 
             if (open) {
@@ -828,6 +826,7 @@ namespace {
     }
 
     void drawMenu() {
+        g.nextRects.clear();
         if (!g.open) return;
 
         beginFrame();
@@ -849,7 +848,8 @@ namespace {
                     touchScroll();
                 }
                 titleTap();
-                ImGui::End();
+                noteRect();
+            ImGui::End();
                 slot++;
             }
 
@@ -861,6 +861,7 @@ namespace {
                 touchScroll();
             }
             titleTap();
+            noteRect();
             ImGui::End();
             slot++;
         }
@@ -871,7 +872,8 @@ namespace {
             touchScroll();
         }
         titleTap();
-        ImGui::End();
+        noteRect();
+            ImGui::End();
         slot++;
 
         if (beginWindow("Settings###settings", slot)) {
@@ -880,7 +882,8 @@ namespace {
             touchScroll();
         }
         titleTap();
-        ImGui::End();
+        noteRect();
+            ImGui::End();
 
         drawHackSettingsWindows();
         drawPickerWindows();
@@ -1019,7 +1022,7 @@ $on_mod(Loaded) {
         if (!g.fontLoaded) io.Fonts->AddFontDefault();
     }).draw([] {
         drawMenu();
-        collectUiRects();
+        commitRects();
     });
 }
 
