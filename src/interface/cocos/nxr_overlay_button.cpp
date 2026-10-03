@@ -45,8 +45,6 @@ bool NXROverlayButton::init(const char* file) {
     setPosition({0, 0});
     scheduleUpdate();
 
-    CCMenu::setVisible(true);
-
     return true;
 }
 
@@ -59,13 +57,16 @@ void NXROverlayButton::setSizeScale(float scale) {
 }
 
 void NXROverlayButton::setVisible(bool visible) {
+    if (isVisible() == visible) return;
+
     CCMenu::setVisible(visible);
 
-    if (!isRunning()) return;
-
     if (auto dispatcher = CCDirector::sharedDirector()->getTouchDispatcher()) {
-        dispatcher->removeDelegate(this);
-        if (visible) dispatcher->addTargetedDelegate(this, -1000, true);
+        if (visible) {
+            dispatcher->addTargetedDelegate(this, -1000, true);
+        } else {
+            dispatcher->removeDelegate(this);
+        }
     }
 }
 

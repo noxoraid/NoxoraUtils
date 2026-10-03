@@ -1,3 +1,11 @@
+# v1.4.14
+
+- **Fix:** overlay button not opening the panel. Touch handling is back to exactly how it worked before v1.4.12. The only change kept is that the hidden state is no longer saved to the config.
+
+# v1.4.13
+
+- **Fix:** overlay button not opening the panel. Its touch handler is no longer added and removed manually when it is shown or hidden, it only uses the normal enter/exit registration. Hidden state still is not saved.
+
 # v1.4.12
 
 - **Fix:** the overlay button no longer disappears after restarting the game. Its hidden state was being saved to the config, now it is never saved and it always comes back on the menu.
