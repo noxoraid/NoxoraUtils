@@ -371,14 +371,14 @@ namespace {
 
         // Marks are sorted by start, so a matching player 1 click is among the neighbours
         // whose start is within one frame.
-        auto near = [](uint32_t a, uint32_t b) { return a > b ? a - b <= 1 : b - a <= 1; };
+        auto withinOne = [](uint32_t a, uint32_t b) { return a > b ? a - b <= 1 : b - a <= 1; };
         for (size_t i = 0; i < g_marks.size(); i++) {
             auto& mark = g_marks[i];
             if (mark.player != 2) continue;
 
             auto repeatsP1 = [&](size_t j) {
                 const auto& other = g_marks[j];
-                return other.player == 1 && near(other.start, mark.start) && near(other.end, mark.end);
+                return other.player == 1 && withinOne(other.start, mark.start) && withinOne(other.end, mark.end);
             };
 
             for (size_t j = i; j-- > 0 && g_marks[j].start + 1 >= mark.start;) {

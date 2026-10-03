@@ -47,10 +47,11 @@ namespace NXR::Straight {
     inline void apply(PlayerObject* player, State& st, const std::string& keyPrefix) {
         auto& config = NXRConfig::get();
 
-        const int mode  = std::clamp(config.get<int>(keyPrefix + "::mode", Manual), Manual, Auto);
+        const int mode  = std::clamp(config.get<int>(keyPrefix + "::mode", static_cast<int>(Manual)),
+                                     static_cast<int>(Manual), static_cast<int>(Auto));
         const int grace = std::max(0, config.get<int>(keyPrefix + "::grace", 4));
 
-        if (mode == Auto) {
+        if (mode == static_cast<int>(Auto)) {
             const int rate = std::max(1, config.get<int>(keyPrefix + "::auto_rate", 1));
             if (++st.autoCounter >= rate) {
                 st.autoCounter = 0;
