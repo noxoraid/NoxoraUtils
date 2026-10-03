@@ -21,47 +21,14 @@ namespace {
     NXR::Straight::State g_ship1;
     NXR::Straight::State g_ship2;
 
-    void applyShipStraight(GJBaseGameLayer* layer, PlayerObject* player,
-                           NXR::Straight::State& st, bool isPlayer1) {
-        auto& config = NXRConfig::get();
-
+    // Ship only: reset when the player is not in Ship form.
+    void applyShipStraight(PlayerObject* player, NXR::Straight::State& st) {
         if (!player->m_isShip) {
             st.reset();
             return;
         }
 
-        const int mode  = std::clamp(config.get<int>("nxr.utils.ship_straight::mode", 1), 1, 2);
-        const int grace = std::max(0, config.get<int>("nxr.utils.ship_straight::grace", 4));
-
-        if (mode == NXR::Straight::Auto) {
-            const int rate = std::max(1, config.get<int>("nxr.utils.ship_straight::auto_rate", 1));
-            st.autoCounter++;
-            if (st.autoCounter >= rate) {
-                st.autoCounter = 0;
-                st.autoHolding = !st.autoHolding;
-                if (st.autoHolding) NXR::Input::press(player); else NXR::Input::release(player);
-            }
-        } else if (st.autoHolding) {
-            NXR::Input::release(player);
-            st.autoHolding = false;
-            st.autoCounter = 0;
-        }
-
-        st.idleFrames++;
-
-        if (!NXR::Straight::shouldStraighten(mode, st, grace)) {
-            st.hasLockY = false;
-            return;
-        }
-
-        if (!st.hasLockY) {
-            st.lockY = player->getPositionY();
-            st.hasLockY = true;
-        }
-
-        player->m_yVelocity = 0.0;
-        player->setPositionY(st.lockY);
-        player->setRotation(0.f);
+        NXR::Straight::apply(player, st, "nxr.utils.ship_straight");
     }
 }
 
@@ -140,14 +107,14 @@ class $modify(NXRShipStraightTickGameLayer, GJBaseGameLayer) {
 
         if (m_player1 && !m_player1->m_isDead) {
             if (config.get<bool>("nxr.utils.ship_straight::p1", true))
-                applyShipStraight(this, m_player1, g_ship1, true);
+                applyShipStraight(m_player1, g_ship1);
             else
                 g_ship1.reset();
         }
 
         if (m_gameState.m_isDualMode && m_player2 && !m_player2->m_isDead) {
             if (config.get<bool>("nxr.utils.ship_straight::p2", true))
-                applyShipStraight(this, m_player2, g_ship2, false);
+                applyShipStraight(m_player2, g_ship2);
             else
                 g_ship2.reset();
         } else {

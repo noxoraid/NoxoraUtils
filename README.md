@@ -198,6 +198,7 @@ magic "NXR9"
 version string, level name, level id, tps, fps, macro name, total frames, layout hash
 events[]   : u64 count, then u32 packed each
 frames[]   : u64 count, then per row: frame, p1 state, p2 state, hold mask, full flag
+             (bit 16 of the p2 flags = dual mode was active on that row)
 supers[]   : u64 count, then per entry: frame, p1 blob, p2 blob
 stats      : optional level stats (u8 present flag + values)
 ```

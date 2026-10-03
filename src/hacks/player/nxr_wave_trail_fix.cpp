@@ -1,6 +1,8 @@
 #include <Geode/Geode.hpp>
 #include <Geode/modify/PlayerObject.hpp>
 #include <Geode/modify/PlayLayer.hpp>
+#include <Geode/modify/HardStreak.hpp>
+#include <cmath>
 #include "../../core/nxr_config.hpp"
 
 using namespace geode::prelude;
@@ -46,5 +48,34 @@ class $modify(NXRWaveTrailFixPlayLayer, PlayLayer) {
     void resetLevel() {
         resetLast();
         PlayLayer::resetLevel();
+    }
+};
+
+// The wave trail is a strip built from a list of points. Two identical points in a row make
+// a zero-length segment, whose direction cannot be computed, and the strip then draws a thin
+// line stretching back along the trail. Points get duplicated when the game places a corner
+// at the player's position and the fix above adds the same position again, which happens at
+// every click during playback. This drops those points, and any point that is not a number.
+class $modify(NXRWaveTrailGuardHardStreak, HardStreak) {
+    struct Fields {
+        CCPoint last = {0.f, 0.f};
+        bool hasLast = false;
+    };
+
+    void addPoint(CCPoint point) {
+        if (!NXRConfig::get().get<bool>("nxr.bot.wave_trail_fix", true)) {
+            HardStreak::addPoint(point);
+            return;
+        }
+
+        if (!std::isfinite(point.x) || !std::isfinite(point.y)) return;
+
+        auto fields = m_fields.self();
+        constexpr float kSamePoint = 0.001f;
+        if (fields->hasLast && std::fabs(fields->last.x - point.x) < kSamePoint && std::fabs(fields->last.y - point.y) < kSamePoint) return;
+
+        fields->last = point;
+        fields->hasLast = true;
+        HardStreak::addPoint(point);
     }
 };

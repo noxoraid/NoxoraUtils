@@ -22,47 +22,14 @@ namespace {
     NXR::Straight::State g_wave1;
     NXR::Straight::State g_wave2;
 
-    void applyWaveStraight(GJBaseGameLayer* layer, PlayerObject* player,
-                           NXR::Straight::State& st, bool isPlayer1) {
-        auto& config = NXRConfig::get();
-
+    // Wave only: reset when the player is not in Wave form or while a replay is playing (the bot drives the inputs).
+    void applyWaveStraight(PlayerObject* player, NXR::Straight::State& st) {
         if (!player->m_isDart || NXR::Bot::State::get().mode == NXR::Bot::Mode::Playing) {
             st.reset();
             return;
         }
 
-        const int mode  = std::clamp(config.get<int>("nxr.utils.wave_straight::mode", 1), 1, 2);
-        const int grace = std::max(0, config.get<int>("nxr.utils.wave_straight::grace", 4));
-
-        if (mode == NXR::Straight::Auto) {
-            const int rate = std::max(1, config.get<int>("nxr.utils.wave_straight::auto_rate", 1));
-            st.autoCounter++;
-            if (st.autoCounter >= rate) {
-                st.autoCounter = 0;
-                st.autoHolding = !st.autoHolding;
-                if (st.autoHolding) NXR::Input::press(player); else NXR::Input::release(player);
-            }
-        } else if (st.autoHolding) {
-            NXR::Input::release(player);
-            st.autoHolding = false;
-            st.autoCounter = 0;
-        }
-
-        st.idleFrames++;
-
-        if (!NXR::Straight::shouldStraighten(mode, st, grace)) {
-            st.hasLockY = false;
-            return;
-        }
-
-        if (!st.hasLockY) {
-            st.lockY = player->getPositionY();
-            st.hasLockY = true;
-        }
-
-        player->m_yVelocity = 0.0;
-        player->setPositionY(st.lockY);
-        player->setRotation(0.f);
+        NXR::Straight::apply(player, st, "nxr.utils.wave_straight");
     }
 }
 
@@ -141,14 +108,14 @@ class $modify(NXRWaveStraightTickGameLayer, GJBaseGameLayer) {
 
         if (m_player1 && !m_player1->m_isDead) {
             if (config.get<bool>("nxr.utils.wave_straight::p1", true))
-                applyWaveStraight(this, m_player1, g_wave1, true);
+                applyWaveStraight(m_player1, g_wave1);
             else
                 g_wave1.reset();
         }
 
         if (m_gameState.m_isDualMode && m_player2 && !m_player2->m_isDead) {
             if (config.get<bool>("nxr.utils.wave_straight::p2", true))
-                applyWaveStraight(this, m_player2, g_wave2, false);
+                applyWaveStraight(m_player2, g_wave2);
             else
                 g_wave2.reset();
         } else {

@@ -15,19 +15,47 @@
 #include <memory>
 #include <cmath>
 
+// Bot engine: records and replays a run frame by frame.
+//
+// Everything hangs off three hooks:
+//   GJBaseGameLayer::processCommands   one call per physics tick; this is where the frame
+//                                      number advances and rows are recorded or applied
+//   GJBaseGameLayer::processQueuedButtons / handleButton
+//                                      inputs go in (playback) or come out (recording)
+//   PlayLayer::resetLevel / checkpoints
+//                                      rewinds the frame counter and cuts the macro
+//
+// The macro data model lives in core/nxr_bot.hpp, the file format in core/nxr_macro_io.cpp.
 namespace {
     using namespace NXR::Bot;
     namespace Cap = NXR::Capture;
 
+    // Hook priorities. Lower runs first. Other mods hook the same functions, so these are
+    // explicit rather than left to load order.
+    constexpr int kProcessCommandsPriority = -30;
+    constexpr int kButtonPriority = -1000;  // must see the button state after every other mod
+
+    // A full player snapshot is stored this often (in ticks). Playback restores the nearest
+    // earlier snapshot when it detects drift, so a smaller value means finer repair but a
+    // bigger file.
     constexpr uint32_t kSuperInterval = 30;
 
+    // True only while we are inside processQueuedButtons; lets handleButton tell our own
+    // replayed inputs apart from real touches.
     bool g_inQueue = false;
+    // True only while injectReplayInputs queues a button, so the input blocker lets it through.
     bool g_replayInject = false;
 
+    // The frame number is derived from the game's tick counter plus a bias. The bias is
+    // recalculated after every reset so a checkpoint load lands on the macro frame that
+    // checkpoint was stored at.
     int64_t g_frameBias = 0;
     bool g_needAnchor = true;
     Mode g_anchorMode = Mode::Off;
 
+    // Whether m_currentProgress has already been incremented when processCommands is entered
+    // is not the same on every platform/build. We watch a few ticks and decide at runtime
+    // (see the probe at the end of processCommands) instead of hard-coding it.
     bool g_progressInside = true;
     bool g_progressProbed = false;
     int g_outsideVotes = 0;
@@ -37,6 +65,8 @@ namespace {
         return static_cast<int64_t>(layer->m_gameState.m_currentProgress);
     }
 
+    // Frame numbers start at 1. The +1 compensates when the tick counter is incremented
+    // inside processCommands (g_progressInside) rather than before it.
     uint64_t anchoredFrame(GJBaseGameLayer* layer) {
         const int64_t frame = completedTicks(layer) + (g_progressInside ? 1 : 0) + g_frameBias;
         return frame < 1 ? uint64_t{1} : static_cast<uint64_t>(frame);
@@ -97,6 +127,8 @@ namespace {
         return pl && static_cast<GJBaseGameLayer*>(pl) == layer;
     }
 
+    // While a replay plays, real touches are dropped (option "Ignore Inputs") so the player
+    // cannot disturb it. Inputs we inject ourselves carry g_replayInject / g_inQueue.
     bool blockRealInput(GJBaseGameLayer* layer) {
         return State::get().mode == Mode::Playing && ignoringInputs() && !g_replayInject && isActiveLayer(layer);
     }
@@ -159,6 +191,7 @@ namespace {
         row.frame = static_cast<uint32_t>(frame);
         row.p1 = Cap::readState(layer->m_player1);
         row.p2 = Cap::readState(layer->m_player2);
+        if (dual) row.p2.flags |= Cap::kDualBit;
         row.hold = holdOverride >= 0 ? static_cast<uint8_t>(holdOverride) : heldMask();
         row.full = true;
         m.frames.push_back(row);
@@ -273,6 +306,9 @@ namespace {
         p->flipGravity(want, true);
     }
 
+    // How far the live player may stray from the recorded row before playback rewrites it.
+    // Positions are in game units, rotation in degrees. Small values keep the replay exact;
+    // large values would let tiny float differences accumulate into a death.
     constexpr float kDriftEps = 0.002f;
     constexpr float kVelEps = 0.002f;
     constexpr float kRotEps = 1.f;
@@ -292,6 +328,10 @@ namespace {
         return diff > kRotEps;
     }
 
+    // Brings the players in line with the recorded row for `frame`.
+    // Order matters: mode/gravity first (they change what the other fields mean), then a
+    // position check. Only when the player has drifted do we restore the nearest super frame
+    // and overwrite the state; otherwise we leave the game's own physics alone.
     void applyPlayback(GJBaseGameLayer* layer, uint64_t frame, bool force = false) {
         auto& m = State::get().current;
         if (frame == 0 || m.frames.empty()) return;
@@ -329,6 +369,9 @@ namespace {
         applyHold(layer, row->hold, dual);
     }
 
+    // A death during playback while a recorded row exists for this frame means the replay
+    // drifted (the original run survived here). Returns true so the caller can swallow the
+    // death and let applyPlayback repair the state on the next tick.
     bool isDesyncDeath(PlayLayer* pl, GameObject* object) {
         auto& st = State::get();
         if (st.mode != Mode::Playing || !rescueEnabled()) return false;
@@ -625,7 +668,7 @@ namespace {
 class $modify(NXRBotGameLayer, GJBaseGameLayer) {
     static void onModify(auto& self) {
         NXR::Gui::get().getWindow("Bot");
-        NXR::trySetPriority(self, "GJBaseGameLayer::processCommands", -30);
+        NXR::trySetPriority(self, "GJBaseGameLayer::processCommands", kProcessCommandsPriority);
     }
 
     void handleButton(bool down, int button, bool player1) {
@@ -656,6 +699,12 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
         g_inQueue = false;
     }
 
+    // One physics tick. Steps, in order:
+    //   1. advance the frame counter (not on half-ticks, not while paused or finished)
+    //   2. in playback, pre-apply the previous row so the tick starts from the right state
+    //   3. run the game's tick
+    //   4. probe once whether the tick counter is incremented inside the call
+    //   5. record the new row (recording) or enforce it again (playback)
     void processCommands(float dt, bool isHalfTick, bool isLastTick) {
         auto* pl = PlayLayer::get();
         bool counted = false;
@@ -816,6 +865,9 @@ class $modify(NXRBotPlayLayer, PlayLayer) {
         PlayLayer::fullReset();
     }
 
+    // Runs on every death, restart and checkpoint respawn. Works out which macro frame the
+    // attempt restarts from (0, or the frame stored with the last practice checkpoint) and
+    // rewinds the recorder/player to it.
     void resetLevel() {
         auto& st = State::get();
 
@@ -910,8 +962,8 @@ class $modify(NXRBotPlayLayer, PlayLayer) {
 
 class $modify(NXRBotPlayerObject, PlayerObject) {
     static void onModify(auto& self) {
-        NXR::trySetPriority(self, "PlayerObject::pushButton", -1000);
-        NXR::trySetPriority(self, "PlayerObject::releaseButton", -1000);
+        NXR::trySetPriority(self, "PlayerObject::pushButton", kButtonPriority);
+        NXR::trySetPriority(self, "PlayerObject::releaseButton", kButtonPriority);
     }
 
     bool pushButton(PlayerButton button) {

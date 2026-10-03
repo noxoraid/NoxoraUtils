@@ -22,13 +22,22 @@
 
 using namespace geode::prelude;
 
+// Table layout: one ImGui window per menu tab, drawn on top of the game through imgui-cocos.
+//
+// Two things here are easy to get wrong on a touch screen:
+//   * ImGui has no touch scrolling, so touchScroll() turns a finger drag into a scroll and
+//     tapButton() ignores a press that turned out to be a scroll.
+//   * The game reads touches on its own, independent of ImGui. touchOverUi() (used by the
+//     UILayer / EditorUI hooks at the bottom) keeps touches that start on a window away
+//     from the level.
 namespace {
+    // Sizes are authored for a 1080-pixel-high screen and scaled by the real height.
     constexpr float kReferenceHeight = 1080.f;
     constexpr float kFontPixels = 32.f;
     constexpr float kDefaultFontPixels = 13.f;
-    constexpr float kWindowEm = 17.f;
+    constexpr float kWindowEm = 17.f;     // window width, in font heights
     constexpr float kWindowGap = 8.f;
-    constexpr float kDragStart = 10.f;
+    constexpr float kDragStart = 10.f;    // finger travel (px at scale 1) before a tap becomes a scroll
     constexpr const char* kOpenMenuBind = "nxr.menu::toggle";
 
     struct Picker {
@@ -180,10 +189,14 @@ namespace {
         }
     }
 
+    // Runs `fn` on the main thread after the current ImGui frame, so a button callback may
+    // open popups or touch cocos nodes without doing it in the middle of drawing.
     void deferMain(std::function<void()> fn) {
         geode::queueInMainThread(std::move(fn));
     }
 
+    // Like deferMain, but for a callback that takes arguments (a toggle's new value, say).
+    // The callback is moved into shared storage so the queued lambda can be copied safely.
     template <class Fn, class... Args>
     void laterCall(Fn&& fn, Args... args) {
         auto holder = std::make_shared<std::decay_t<Fn>>(std::forward<Fn>(fn));
@@ -192,8 +205,9 @@ namespace {
         });
     }
 
+    // A button that only counts as pressed when the finger did not scroll the window.
+    // `active` draws it in the accent color (selected / on).
     bool tapButton(const char* label, ImVec2 size, bool active) {
-        const ImGuiStyle& st = ImGui::GetStyle();
         if (active) {
             const ImVec4 accent = mix(accentColor(), ImVec4(1.f, 1.f, 1.f, 1.f), 0.1f);
             ImGui::PushStyleColor(ImGuiCol_Button, accent);
@@ -202,7 +216,6 @@ namespace {
         }
         const bool pressed = ImGui::Button(label, size);
         if (active) ImGui::PopStyleColor(3);
-        (void) st;
         return pressed && !g.scrolled;
     }
 
@@ -262,6 +275,9 @@ namespace {
         return changed;
     }
 
+    // Call once at the end of a window's contents. A drag that starts in the window body
+    // scrolls it; the title bar is left alone so the window can still be moved. Does nothing
+    // while a slider is being dragged.
     void touchScroll(bool hasTitle = true) {
         ImGuiIO& io = ImGui::GetIO();
         const ImGuiID id = ImGui::GetID("##touchscroll");
@@ -680,6 +696,10 @@ namespace {
         if (NXR::Imgui::button("Reset Window Positions", -1.f)) g.resetLayout = true;
     }
 
+    // The touch dispatcher runs before ImGui builds the next frame, so ImGui's own hover
+    // state is one frame stale when a touch begins. We keep our own list of window rectangles
+    // from the last frame instead (see touchOverUi). Call this inside every window, just
+    // before ImGui::End().
     void noteRect() {
         const ImVec2 pos = ImGui::GetWindowPos();
         const ImVec2 size = ImGui::GetWindowSize();

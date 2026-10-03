@@ -50,6 +50,10 @@ namespace {
     constexpr float kHudNoteSize = 8.f;
     constexpr float kHudBarHalf = 5.f;
     constexpr float kHudLaneGap = 30.f;
+    // The path is sampled every few frames. Two neighbouring samples further apart than this
+    // (in game units) are a teleport (portal, respawn) or stale data, never real movement,
+    // so no segment is drawn between them.
+    constexpr float kMaxSegmentJump = 160.f;
 
     enum Effect : int {
         EffectFadeout = 1,
@@ -62,6 +66,9 @@ namespace {
         uint8_t player = 1;
         float xs = 0.f;
         float xe = 0.f;
+        // A player 2 click that repeats a player 1 click (same start and end). In a normal
+        // dual level one tap presses both players, so only player 1's marker is drawn.
+        bool mirrored = false;
     };
 
     struct Perfect {
@@ -78,6 +85,8 @@ namespace {
     size_t g_perfectNext = 0;
     size_t g_builtCount = 0;
     bool g_built = false;
+    // True when the macro has the dual flag on its rows (recorded by v1.4.5 or newer).
+    bool g_hasDualInfo = false;
     uint64_t g_lastDraw = UINT64_MAX;
     Ref<CCNode> g_root;
     Ref<CCDrawNode> g_draw;
@@ -292,6 +301,32 @@ namespace {
         return {here.x + (static_cast<float>(frame) - static_cast<float>(g_now)) * perFrame, here.y};
     }
 
+    const MacroFrame* rowNear(uint32_t frame) {
+        const auto& rows = src().frames;
+        if (rows.empty()) return nullptr;
+
+        auto upper = std::partition_point(rows.begin(), rows.end(), [frame](const MacroFrame& row) {
+            return row.frame <= frame;
+        });
+        return upper == rows.begin() ? &*upper : &*(upper - 1);
+    }
+
+    // Was player 2 really in play at `frame`? In single mode the game keeps a hidden player 2
+    // whose position is stale, and drawing its path is what produced the long stray line.
+    bool dualAt(uint32_t frame) {
+        const MacroFrame* row = rowNear(frame);
+        if (!row) return false;
+
+        if (g_hasDualInfo) return (row->p2.flags & NXR::Capture::kDualBit) != 0;
+
+        // Older replays have no flag. Both players share the same x in a dual level.
+        return row->p2.x != 0.f && std::fabs(row->p1.x - row->p2.x) < 1.f;
+    }
+
+    bool farApart(const CCPoint& a, const CCPoint& b) {
+        return std::fabs(a.x - b.x) > kMaxSegmentJump || std::fabs(a.y - b.y) > kMaxSegmentJump;
+    }
+
     void build(PlayLayer* pl) {
         g_marks.clear();
         g_first = 0;
@@ -329,6 +364,31 @@ namespace {
         }
 
         std::stable_sort(g_marks.begin(), g_marks.end(), [](const Mark& a, const Mark& b) { return a.start < b.start; });
+
+        g_hasDualInfo = std::any_of(src().frames.begin(), src().frames.end(), [](const MacroFrame& row) {
+            return (row.p2.flags & NXR::Capture::kDualBit) != 0;
+        });
+
+        // Marks are sorted by start, so a matching player 1 click is among the neighbours
+        // whose start is within one frame.
+        auto near = [](uint32_t a, uint32_t b) { return a > b ? a - b <= 1 : b - a <= 1; };
+        for (size_t i = 0; i < g_marks.size(); i++) {
+            auto& mark = g_marks[i];
+            if (mark.player != 2) continue;
+
+            auto repeatsP1 = [&](size_t j) {
+                const auto& other = g_marks[j];
+                return other.player == 1 && near(other.start, mark.start) && near(other.end, mark.end);
+            };
+
+            for (size_t j = i; j-- > 0 && g_marks[j].start + 1 >= mark.start;) {
+                if (repeatsP1(j)) { mark.mirrored = true; break; }
+            }
+            for (size_t j = i + 1; !mark.mirrored && j < g_marks.size() && g_marks[j].start <= mark.start + 1; j++) {
+                if (repeatsP1(j)) mark.mirrored = true;
+            }
+        }
+
         g_builtCount = src().events.size();
         g_built = true;
     }
@@ -402,7 +462,7 @@ namespace {
         const uint64_t perfectGap = minGapFrames(8.f);
         while (g_perfectNext < g_marks.size() && g_marks[g_perfectNext].start <= now) {
             const auto& mark = g_marks[g_perfectNext];
-            if (now - mark.start <= 4 && g_perfect.size() < 8
+            if (!mark.mirrored && now - mark.start <= 4 && g_perfect.size() < 8
                 && (!g_perfectSpawned || mark.start < g_lastPerfect || mark.start - g_lastPerfect >= perfectGap)) {
                 spawnPerfect(pl, mark, now);
                 g_lastPerfect = mark.start;
@@ -485,6 +545,7 @@ namespace {
         for (size_t i = g_first; i < g_marks.size() && static_cast<double>(g_marks[i].start) <= static_cast<double>(now) + aheadFrames() && drawn < kMaxDrawMarks; i++) {
             const auto& mark = g_marks[i];
             if (static_cast<double>(now) > static_cast<double>(mark.end) + fade) continue;
+            if (mark.player == 2 && (mark.mirrored || !dualAt(mark.start))) continue;
             drawn++;
 
             auto* target = mark.player == 2 ? pl->m_player2 : pl->m_player1;
@@ -753,39 +814,56 @@ namespace {
         return false;
     }
 
+    // Draws where each player will go over the next `trail_ahead` frames, plus a marker at
+    // every click. Player 1 uses the trail color (green), player 2 the P2 color (purple).
     void drawTrail(PlayLayer* pl, uint64_t now64) {
         const uint32_t now = static_cast<uint32_t>(now64);
         const uint32_t ahead = trailAhead();
         const uint32_t stride = std::max<uint32_t>(1u, ahead / kTrailSegments);
         const float width = trailWidth();
 
-        const ccColor3B trail = trailColor();
-        const ccColor3B body = bodyColor();
-        const ccColor4F baseColor = premultiplied(trail, 0.7f);
-        const ccColor4F holdColor = premultiplied(body, 0.95f);
+        const ccColor3B pathColor[2] = {trailColor(), p2Color()};
+        const ccColor3B bodyColorOf[2] = {bodyColor(), p2Color()};
         const ccColor4F dotColor = premultiplied({255, 255, 255}, 0.95f);
-        const ccColor4F releaseColor = premultiplied(trail, 0.9f);
 
         size_t first = g_first;
         while (first < g_marks.size() && g_marks[first].end < now) first++;
 
-        const uint8_t players = pl->m_gameState.m_isDualMode ? 2 : 1;
+        for (uint8_t player = 1; player <= 2; player++) {
+            const int slot = player - 1;
+            const ccColor4F baseColor = premultiplied(pathColor[slot], 0.7f);
+            const ccColor4F holdColor = premultiplied(bodyColorOf[slot], 0.95f);
 
-        for (uint8_t player = 1; player <= players; player++) {
             CCPoint prev = pointAt(pl, now, player);
+            bool prevValid = player == 1 || dualAt(now);
+
             for (uint32_t frame = now + stride; frame <= now + ahead; frame += stride) {
-                const CCPoint cur = pointAt(pl, frame, player);
-                const bool held = heldAt(frame, player, first);
-                g_draw->drawSegment(prev, cur, held ? width * 1.6f : width * 0.6f, held ? holdColor : baseColor);
+                const bool valid = player == 1 || dualAt(frame);
+                const CCPoint cur = valid ? pointAt(pl, frame, player) : prev;
+
+                if (valid && prevValid && !farApart(prev, cur)) {
+                    const bool held = heldAt(frame, player, first);
+                    g_draw->drawSegment(prev, cur, held ? width * 1.6f : width * 0.6f, held ? holdColor : baseColor);
+                }
+
                 prev = cur;
+                prevValid = valid;
             }
         }
 
         int drawnMarks = 0;
         for (size_t i = first; i < g_marks.size() && g_marks[i].start <= now + ahead && drawnMarks < kMaxDrawMarks; i++) {
             const auto& mark = g_marks[i];
-            if (mark.player == 2 && players < 2) continue;
+
+            // Player 2 only gets its own marker when it clicked on its own (split input);
+            // a repeated tap already has player 1's marker, and a P2 click outside dual mode
+            // belongs to the hidden player.
+            if (mark.player == 2 && (mark.mirrored || !dualAt(mark.start))) continue;
             drawnMarks++;
+
+            const int slot = mark.player - 1;
+            const ccColor4F holdColor = premultiplied(bodyColorOf[slot], 0.95f);
+            const ccColor4F releaseColor = premultiplied(pathColor[slot], 0.9f);
 
             if (mark.start >= now) {
                 const CCPoint p = pointAt(pl, mark.start, mark.player);

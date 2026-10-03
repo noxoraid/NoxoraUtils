@@ -43,6 +43,9 @@ namespace NXR::Capture {
     constexpr uint32_t kSpeedShift = 12;
     constexpr uint32_t kSpeedMask = 7u << kSpeedShift;
     constexpr uint32_t kModeValid = 1u << 15;
+    // Set on player 2 rows while dual mode is active. Lets readers of a macro (the click
+    // indicator) tell a real player 2 from the stale, hidden one in single mode.
+    constexpr uint32_t kDualBit = 1u << 16;
 
     inline int modeOf(PlayerObject& p) {
         if (p.m_isShip) return 1;
