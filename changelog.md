@@ -1,3 +1,10 @@
+# v1.4.5
+
+- **Fix:** tapping the Table menu (window titles, check boxes, buttons, the open/collapse arrow) no longer sends the tap to the game. Before, the first touch on a menu window could reach the level as a jump, and the release was swallowed by the menu, so the player kept jumping like the screen was held. Now any touch that starts on a Table window, popup or color picker is blocked from the level (and from the editor) from the start to the end. Touches outside the menu still play normally. Applies to Windows, macOS and Android64.
+- **Fix:** the **Clean** hack settings popup no longer moves when you drag or scroll inside it. It stays still and only the options scroll. Tapping empty space outside still closes it.
+- **Table:** Bot macro pickers are now ImGui windows instead of the Panel popup: **Select Replay**, **Load**, **Delete**, **Export JSON** and both steps of **Merge Replays**. They use the same style as the hack settings window and follow the Hack Settings Popup setting (Popup = title bar with X, Clean = only the list, tap outside to cancel). Tap a replay to select it (tap again to deselect on Select Replay), **i** shows its actions, frames, super frames and TPS, then press the action button or Cancel. Panel is unchanged and still uses its popups.
+- **Table:** while a macro picker is open, the menu windows behind it stay visible and usable instead of being hidden.
+
 # v1.4.4
 
 - **Table:** new setting **Hack Settings Popup** with two modes. **Popup** is the floating window with title bar, arrow and X like before. **Clean** shows only the options (no title bar, no arrow, no X) and closes when you tap any empty space outside the menu. Tapping inside the popup or on the menu windows does not close it. Table only, Panel is unchanged.

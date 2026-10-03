@@ -352,8 +352,8 @@ namespace {
                 mergeReplays(nameA, nameB, mode, out);
             }), "Nama hasil merge");
         };
-        NXR::Ui::showPopup(NXRReplayPickerPopup::create("Merge: pilih macro 1", "Pilih", [askName](const std::string& nameA) {
-            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Merge: pilih macro 2", "Pilih", [askName, nameA](const std::string& nameB) {
+        NXR::Ui::pickReplay("Merge: pilih macro 1", "Pilih", [askName](const std::string& nameA) {
+            NXR::Ui::pickReplay("Merge: pilih macro 2", "Pilih", [askName, nameA](const std::string& nameB) {
                 NXR::Ui::showChoice(
                     "Mode Merge",
                     {"Sambung: macro 2 disambung ke macro 1", "P1 + P2: P1 dari macro 1, P2 dari macro 2"},
@@ -362,8 +362,8 @@ namespace {
                         {"P1 + P2", [askName, nameA, nameB] { askName(nameA, nameB, MergeMode::Players); }}
                     }
                 );
-            }), "Merge: pilih macro 2");
-        }), "Merge: pilih macro 1");
+            });
+        });
     }
 
     void restoreAutosave() {
@@ -487,9 +487,9 @@ namespace {
         ImGui::TextUnformatted("Replays");
         if (NXR::Imgui::button(replayLabel(), -1.f)) {
             NXR::Imgui::later([] {
-                NXR::Ui::showPopup(NXRReplayPickerPopup::create("Select Replay", "Select", [](const std::string& name) {
+                NXR::Ui::pickReplay("Select Replay", "Select", [](const std::string& name) {
                     State::get().selectedReplay = name;
-                }, true), "Select Replay");
+                }, true);
             });
         }
         if (NXR::Imgui::button("Settings", -1.f)) {
@@ -520,15 +520,15 @@ namespace {
         }, "Save", [] { saveReplay(); });
 
         pairRow("Load", [] {
-            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); }), "Load Replay");
+            NXR::Ui::pickReplay("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); });
         }, "Delete", [] {
-            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); }), "Delete Replay");
+            NXR::Ui::pickReplay("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); });
         });
 
         pairRow("Restore Autosave", [] { restoreAutosave(); }, "Browse Replays", [] { openBrowser(); });
 
         pairRow("Merge Replays", [] { startMergeFlow(); }, "Export JSON", [] {
-            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
+            NXR::Ui::pickReplay("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); });
         });
     }
 }

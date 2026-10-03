@@ -1,6 +1,12 @@
 #include "nxr_imgui_menu.hpp"
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui-cocos.hpp>
+#include <Geode/modify/UILayer.hpp>
+#include <Geode/modify/EditorUI.hpp>
+#include <array>
+#include <functional>
+#include <string>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -12,6 +18,7 @@
 #include "../../core/nxr_keybinds.hpp"
 #include "../../core/nxr_ui_mode.hpp"
 #include "../../core/nxr_utils.hpp"
+#include "../../core/nxr_bot.hpp"
 #include "../cocos/nxr_text_style.hpp"
 
 using namespace geode::prelude;
@@ -25,8 +32,23 @@ namespace {
     constexpr float kDragStart = 10.f;
     constexpr const char* kOpenMenuBind = "nxr.menu::toggle";
 
+    struct Picker {
+        int serial = 0;
+        std::string title;
+        std::string action;
+        bool allowClear = false;
+        std::function<void(const std::string&)> onPick;
+        std::vector<std::string> names;
+        std::string selected;
+        std::string infoFor;
+        std::string info;
+    };
+
     struct Runtime {
         bool open = false;
+        std::vector<std::array<float, 4>> rects;
+        std::vector<Picker> pickers;
+        int pickerSerial = 0;
         bool resetLayout = false;
         bool fontLoaded = false;
         Ref<CCNode> hold;
@@ -658,6 +680,120 @@ namespace {
         if (NXR::Imgui::button("Reset Window Positions", -1.f)) g.resetLayout = true;
     }
 
+    void collectUiRects() {
+        g.rects.clear();
+        if (!g.open) return;
+
+        ImGuiContext* ctx = ImGui::GetCurrentContext();
+        if (!ctx) return;
+
+        const float pad = 4.f * g.uiScale;
+        for (ImGuiWindow* window : ctx->Windows) {
+            if (!window || !window->Active || window->Hidden) continue;
+            if (window->Flags & (ImGuiWindowFlags_ChildWindow | ImGuiWindowFlags_NoMouseInputs | ImGuiWindowFlags_Tooltip)) continue;
+            g.rects.push_back({window->Pos.x - pad, window->Pos.y - pad, window->Pos.x + window->Size.x + pad, window->Pos.y + window->Size.y + pad});
+        }
+    }
+
+    std::string replayInfoText(const std::string& name) {
+        NXR::Bot::Macro macro;
+        if (!NXR::Bot::loadMacro(macro, NXR::Bot::macroPathFor(name))) return "Failed to read this replay";
+        return fmt::format("Actions: {}  |  Frames: {}  |  Super: {}  |  TPS: {:.0f}", macro.events.size(), macro.frames.size(), macro.supers.size(), macro.tps);
+    }
+
+    void drawPickerWindows() {
+        const bool clean = NXR::Ui::settingsPopup() == NXR::Ui::Clean;
+
+        for (size_t i = 0; i < g.pickers.size();) {
+            Picker& picker = g.pickers[i];
+            const std::string title = picker.title + "###picker:" + std::to_string(picker.serial);
+            bool open = true;
+            bool done = false;
+
+            ImGuiIO& io = ImGui::GetIO();
+            const float width = ImGui::GetFontSize() * kWindowEm;
+            ImGui::SetNextWindowPos(ImVec2(io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSizeConstraints(ImVec2(width, 0.f), ImVec2(width, io.DisplaySize.y * 0.88f));
+            g.sliderActive = false;
+
+            ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+            if (clean) flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove;
+
+            if (ImGui::Begin(title.c_str(), clean ? nullptr : &open, flags)) {
+                if (clean) {
+                    ImGui::TextUnformatted(picker.title.c_str());
+                    ImGui::Separator();
+                }
+
+                if (picker.allowClear) {
+                    ImGui::PushTextWrapPos(0.f);
+                    ImGui::TextDisabled("Tap the selected replay again to deselect");
+                    ImGui::PopTextWrapPos();
+                }
+
+                if (picker.names.empty()) ImGui::TextDisabled("No replays found");
+
+                const float h = ImGui::GetFrameHeight();
+                const float gap = ImGui::GetStyle().ItemSpacing.x;
+                for (const auto& name : picker.names) {
+                    ImGui::PushID(name.c_str());
+                    const bool selected = picker.selected == name;
+                    const float nameWidth = std::max(1.f, ImGui::GetContentRegionAvail().x - h - gap);
+
+                    if (tapButton(name.c_str(), ImVec2(nameWidth, 0.f), selected)) {
+                        picker.selected = (picker.allowClear && selected) ? std::string() : name;
+                    }
+
+                    ImGui::SameLine();
+                    const bool infoShown = picker.infoFor == name;
+                    if (tapButton("i", ImVec2(h, h), infoShown)) {
+                        if (infoShown) {
+                            picker.infoFor.clear();
+                            picker.info.clear();
+                        } else {
+                            picker.infoFor = name;
+                            picker.info = replayInfoText(name);
+                        }
+                    }
+
+                    if (picker.infoFor == name) {
+                        ImGui::PushTextWrapPos(0.f);
+                        ImGui::TextDisabled("%s", picker.info.c_str());
+                        ImGui::PopTextWrapPos();
+                    }
+                    ImGui::PopID();
+                }
+
+                ImGui::Spacing();
+                ImGui::Separator();
+                ImGui::Spacing();
+
+                const float half = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+                if (tapButton(picker.action.c_str(), ImVec2(half, 0.f), true)) {
+                    if (picker.selected.empty() && !picker.allowClear) {
+                        deferMain([] { geode::Notification::create("Pick a replay first", geode::NotificationIcon::Warning)->show(); });
+                    } else {
+                        auto callback = picker.onPick;
+                        auto chosen = picker.selected;
+                        deferMain([callback, chosen] { if (callback) callback(chosen); });
+                        done = true;
+                    }
+                }
+                ImGui::SameLine();
+                if (tapButton("Cancel", ImVec2(half, 0.f), false)) done = true;
+
+                touchScroll(!clean);
+            }
+            ImGui::End();
+
+            if (open && !done) {
+                i++;
+            } else {
+                g.pickers.erase(g.pickers.begin() + static_cast<std::ptrdiff_t>(i));
+            }
+        }
+    }
+
     void drawHackSettingsWindows() {
         const bool clean = NXR::Ui::settingsPopup() == NXR::Ui::Clean;
 
@@ -673,7 +809,7 @@ namespace {
             g.sliderActive = false;
 
             ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
-            if (clean) flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse;
+            if (clean) flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoMove;
 
             if (ImGui::Begin(title.c_str(), clean ? nullptr : &open, flags)) {
                 g_form.begin();
@@ -689,9 +825,6 @@ namespace {
             }
         }
 
-        if (clean && !g.settings.empty() && ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
-            g.settings.clear();
-        }
     }
 
     void drawMenu() {
@@ -750,6 +883,13 @@ namespace {
         ImGui::End();
 
         drawHackSettingsWindows();
+        drawPickerWindows();
+
+        if (NXR::Ui::settingsPopup() == NXR::Ui::Clean && (!g.settings.empty() || !g.pickers.empty())
+            && ImGui::IsMouseClicked(0) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow)) {
+            g.settings.clear();
+            g.pickers.clear();
+        }
 
         g.resetLayout = false;
     }
@@ -768,6 +908,8 @@ void NXR::Imgui::close() {
     g.open = false;
     g.hold = nullptr;
     g.settings.clear();
+    g.pickers.clear();
+    g.rects.clear();
     NXRConfig::get().save(getFileDataPath());
 }
 
@@ -780,6 +922,49 @@ void NXR::Imgui::openHackSettings(NXR::Hack& hack) {
     if (!g.open) g.open = true;
     if (NXR::Ui::settingsPopup() == NXR::Ui::Clean) g.settings.clear();
     if (std::find(g.settings.begin(), g.settings.end(), &hack) == g.settings.end()) g.settings.push_back(&hack);
+}
+
+bool NXR::Imgui::touchOverUi(cocos2d::CCTouch* touch) {
+    if (!touch || !g.open || g.rects.empty()) return false;
+
+    const auto win = CCDirector::get()->getWinSize();
+    if (win.width <= 0.f || win.height <= 0.f) return false;
+
+    const auto loc = touch->getLocation();
+    const ImVec2 display = ImGui::GetIO().DisplaySize;
+    const float x = loc.x / win.width * display.x;
+    const float y = (1.f - loc.y / win.height) * display.y;
+
+    for (const auto& r : g.rects) {
+        if (x >= r[0] && x <= r[2] && y >= r[1] && y <= r[3]) return true;
+    }
+    return false;
+}
+
+void NXR::Imgui::pickReplay(const std::string& title, const std::string& action, std::function<void(const std::string&)> onPick, bool allowClear) {
+    if (!g.open) g.open = true;
+    if (NXR::Ui::settingsPopup() == NXR::Ui::Clean) {
+        g.settings.clear();
+        g.pickers.clear();
+    }
+
+    Picker picker;
+    picker.serial = ++g.pickerSerial;
+    picker.title = title;
+    picker.action = action;
+    picker.allowClear = allowClear;
+    picker.onPick = std::move(onPick);
+    picker.names = NXR::Bot::listMacros();
+    std::sort(picker.names.begin(), picker.names.end());
+
+    if (allowClear) {
+        const auto& current = NXR::Bot::State::get().selectedReplay;
+        if (std::find(picker.names.begin(), picker.names.end(), current) != picker.names.end()) picker.selected = current;
+    } else if (!picker.names.empty()) {
+        picker.selected = picker.names.front();
+    }
+
+    g.pickers.push_back(std::move(picker));
 }
 
 NXR::Form& NXR::Imgui::form() {
@@ -834,6 +1019,7 @@ $on_mod(Loaded) {
         if (!g.fontLoaded) io.Fonts->AddFontDefault();
     }).draw([] {
         drawMenu();
+        collectUiRects();
     });
 }
 
@@ -842,3 +1028,17 @@ $execute {
         if (!repeat) NXR::Ui::toggleMenu();
     });
 }
+
+class $modify(NXRImguiUILayer, UILayer) {
+    bool ccTouchBegan(cocos2d::CCTouch* touch, cocos2d::CCEvent* event) {
+        if (NXR::Imgui::touchOverUi(touch)) return false;
+        return UILayer::ccTouchBegan(touch, event);
+    }
+};
+
+class $modify(NXRImguiEditorUI, EditorUI) {
+    bool ccTouchBegan(cocos2d::CCTouch* touch, cocos2d::CCEvent* event) {
+        if (NXR::Imgui::touchOverUi(touch)) return false;
+        return EditorUI::ccTouchBegan(touch, event);
+    }
+};

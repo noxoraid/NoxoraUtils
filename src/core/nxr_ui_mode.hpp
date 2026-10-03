@@ -72,5 +72,6 @@ namespace NXR::Ui {
     void toggleMenu();
     void reopenMenu();
     void showPopup(geode::Popup* popup, const std::string& title);
+    void pickReplay(const std::string& title, const std::string& action, std::function<void(const std::string&)> onPick, bool allowClear = false);
     void showChoice(const std::string& title, const std::vector<std::string>& notes, const std::vector<std::pair<std::string, std::function<void()>>>& choices);
 }

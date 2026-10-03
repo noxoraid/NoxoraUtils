@@ -1,5 +1,6 @@
 #pragma once
 #include <Geode/Geode.hpp>
+#include <functional>
 #include <string>
 #include <vector>
 #include "../../core/nxr_form.hpp"
@@ -11,6 +12,8 @@ namespace NXR::Imgui {
     void close();
     void holdFor(cocos2d::CCNode* node);
     void openHackSettings(NXR::Hack& hack);
+    bool touchOverUi(cocos2d::CCTouch* touch);
+    void pickReplay(const std::string& title, const std::string& action, std::function<void(const std::string&)> onPick, bool allowClear = false);
 
     NXR::Form& form();
     bool button(const std::string& label, float width = 0.f, bool active = false);
