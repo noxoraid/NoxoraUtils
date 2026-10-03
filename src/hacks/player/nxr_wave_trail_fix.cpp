@@ -8,11 +8,42 @@
 using namespace geode::prelude;
 
 namespace {
-    CCPoint g_last[2];
-    bool g_hasLast[2] = {false, false};
+    struct WaveTrack {
+        CCPoint last = {0.f, 0.f};
+        int sx = 0;
+        int sy = 0;
+        bool has = false;
+        void* trail = nullptr;
 
-    void resetLast() {
-        g_hasLast[0] = g_hasLast[1] = false;
+        void reset() {
+            has = false;
+            sx = 0;
+            sy = 0;
+            trail = nullptr;
+        }
+    };
+
+    WaveTrack g_track[2];
+    unsigned g_generation = 0;
+
+    constexpr float kMoveEps = 0.01f;
+    constexpr float kJumpDist = 100.f;
+    constexpr float kSamePoint = 0.01f;
+
+    bool fixEnabled() {
+        return NXRConfig::get().get<bool>("nxr.bot.wave_trail_fix", true);
+    }
+
+    int sign(float v) {
+        if (v > kMoveEps) return 1;
+        if (v < -kMoveEps) return -1;
+        return 0;
+    }
+
+    void resetAll() {
+        g_track[0].reset();
+        g_track[1].reset();
+        g_generation++;
     }
 }
 
@@ -20,7 +51,7 @@ class $modify(NXRWaveTrailFixPlayerObject, PlayerObject) {
     void update(float dt) {
         PlayerObject::update(dt);
 
-        if (!NXRConfig::get().get<bool>("nxr.bot.wave_trail_fix", true)) return;
+        if (!fixEnabled()) return;
 
         auto* pl = PlayLayer::get();
         if (!pl) return;
@@ -30,40 +61,73 @@ class $modify(NXRWaveTrailFixPlayerObject, PlayerObject) {
         else if (this == pl->m_player2) slot = 1;
         if (slot < 0) return;
 
+        auto& track = g_track[slot];
+
         if (!m_isDart || !m_waveTrail || m_isDead) {
-            g_hasLast[slot] = false;
+            track.reset();
             return;
         }
 
         const CCPoint pos = this->getPosition();
-        if (g_hasLast[slot] && g_last[slot].equals(pos)) return;
 
-        m_waveTrail->addPoint(pos);
-        g_last[slot] = pos;
-        g_hasLast[slot] = true;
+        if (!std::isfinite(pos.x) || !std::isfinite(pos.y)) {
+            track.reset();
+            return;
+        }
+
+        if (!track.has || track.trail != static_cast<void*>(m_waveTrail)) {
+            track.reset();
+            track.last = pos;
+            track.trail = m_waveTrail;
+            track.has = true;
+            return;
+        }
+
+        const float dx = pos.x - track.last.x;
+        const float dy = pos.y - track.last.y;
+
+        if (std::sqrt(dx * dx + dy * dy) > kJumpDist) {
+            track.last = pos;
+            track.sx = 0;
+            track.sy = 0;
+            return;
+        }
+
+        const int sx = sign(dx);
+        const int sy = sign(dy);
+        if (sx == 0 && sy == 0) return;
+
+        const bool turned = (track.sx != 0 || track.sy != 0) && (sx != track.sx || sy != track.sy);
+        if (turned) m_waveTrail->addPoint(track.last);
+
+        track.sx = sx;
+        track.sy = sy;
+        track.last = pos;
     }
 };
 
 class $modify(NXRWaveTrailFixPlayLayer, PlayLayer) {
     void resetLevel() {
-        resetLast();
+        resetAll();
         PlayLayer::resetLevel();
+        resetAll();
+    }
+
+    void onQuit() {
+        resetAll();
+        PlayLayer::onQuit();
     }
 };
 
-// The wave trail is a strip built from a list of points. Two identical points in a row make
-// a zero-length segment, whose direction cannot be computed, and the strip then draws a thin
-// line stretching back along the trail. Points get duplicated when the game places a corner
-// at the player's position and the fix above adds the same position again, which happens at
-// every click during playback. This drops those points, and any point that is not a number.
 class $modify(NXRWaveTrailGuardHardStreak, HardStreak) {
     struct Fields {
         CCPoint last = {0.f, 0.f};
+        unsigned generation = 0;
         bool hasLast = false;
     };
 
     void addPoint(CCPoint point) {
-        if (!NXRConfig::get().get<bool>("nxr.bot.wave_trail_fix", true)) {
+        if (!fixEnabled()) {
             HardStreak::addPoint(point);
             return;
         }
@@ -71,8 +135,15 @@ class $modify(NXRWaveTrailGuardHardStreak, HardStreak) {
         if (!std::isfinite(point.x) || !std::isfinite(point.y)) return;
 
         auto fields = m_fields.self();
-        constexpr float kSamePoint = 0.001f;
-        if (fields->hasLast && std::fabs(fields->last.x - point.x) < kSamePoint && std::fabs(fields->last.y - point.y) < kSamePoint) return;
+
+        if (fields->generation != g_generation) {
+            fields->generation = g_generation;
+            fields->hasLast = false;
+        }
+
+        if (fields->hasLast
+            && std::fabs(fields->last.x - point.x) < kSamePoint
+            && std::fabs(fields->last.y - point.y) < kSamePoint) return;
 
         fields->last = point;
         fields->hasLast = true;

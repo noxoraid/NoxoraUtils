@@ -1,3 +1,7 @@
+# v1.4.6
+
+- **Fix:** Wave Trail Fix rewritten. It no longer adds a trail point every tick (that made zero-length segments and the thin lines fanning out behind the wave). Now a point is added only at a real corner, when the wave changes direction, at the exact corner position, so the trail stays a clean zigzag in record, playback and normal play. Duplicate, non-finite and stale points are still dropped, and the tracking resets on respawn and quit.
+
 # v1.4.5
 
 - **Fix:** tapping the Table menu (window titles, check boxes, buttons, the open/collapse arrow) no longer sends the tap to the game. Before, the first touch on a menu window could reach the level as a jump, and the release was swallowed by the menu, so the player kept jumping like the screen was held. Now any touch that starts on a Table window, popup or color picker is blocked from the level (and from the editor) from the start to the end. Touches outside the menu still play normally. Applies to Windows, macOS and Android64.
