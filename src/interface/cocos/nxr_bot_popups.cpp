@@ -6,7 +6,6 @@
 #include <filesystem>
 #include <limits>
 #include <vector>
-#include <Geode/ui/Scrollbar.hpp>
 #include "../../core/nxr_bot.hpp"
 #include "../../core/nxr_level_stats.hpp"
 #include "nxr_text_style.hpp"
@@ -236,9 +235,7 @@ bool NXRReplayInfoPopup::init(const std::string& name, const NXR::Bot::Macro& ma
     scroll->moveToTop();
     m_mainLayer->addChild(scroll);
 
-    auto* scrollbar = geode::Scrollbar::create(scroll);
-    scrollbar->setPosition({size.width - 10.f, size.height / 2.f - 22.f});
-    m_mainLayer->addChild(scrollbar);
+    m_mainLayer->addChild(NXR::Kit::ScrollGrip::create(scroll, size.width - 26.f, 14.f, size.height - 62.f, 22.f), 6);
 
     return true;
 }
@@ -258,8 +255,8 @@ bool NXRInfoPopup::init(const std::string& title, const std::string& body) {
     auto size = m_mainLayer->getContentSize();
     NXR::Modal::skin({m_mainLayer, m_bgSprite, m_closeBtn, m_buttonMenu}, title, size.width, size.height);
 
-    auto* scroll = geode::prelude::ScrollLayer::create({size.width - 34.f, size.height - 62.f});
-    scroll->setPosition({17.f, 16.f});
+    auto* scroll = geode::prelude::ScrollLayer::create({size.width - 56.f, size.height - 62.f});
+    scroll->setPosition({14.f, 16.f});
     scroll->m_contentLayer->setLayout(
         geode::ColumnLayout::create()
             ->setAutoScale(false)
@@ -268,7 +265,7 @@ bool NXRInfoPopup::init(const std::string& title, const std::string& body) {
             ->setGap(0.f)
     );
 
-    const size_t wrapAt = std::max<size_t>(16, static_cast<size_t>((size.width - 44.f) / 5.2f));
+    const size_t wrapAt = std::max<size_t>(16, static_cast<size_t>((size.width - 72.f) / 5.2f));
     std::string wrapped;
     for (const auto& line : NXR::Modal::wrap(body, wrapAt)) wrapped += line + "\n";
 
@@ -281,9 +278,7 @@ bool NXRInfoPopup::init(const std::string& title, const std::string& body) {
     scroll->moveToTop();
     m_mainLayer->addChild(scroll);
 
-    auto* scrollbar = geode::Scrollbar::create(scroll);
-    scrollbar->setPosition({size.width - 8.f, size.height / 2.f - 22.f});
-    m_mainLayer->addChild(scrollbar);
+    m_mainLayer->addChild(NXR::Kit::ScrollGrip::create(scroll, size.width - 34.f, 16.f, size.height - 62.f, 22.f), 6);
 
     return true;
 }
@@ -334,7 +329,7 @@ bool NXRReplayPickerPopup::init(const std::string& title, const std::string& act
     }
 
     auto* scroll = geode::prelude::ScrollLayer::create({286.f, 172.f});
-    scroll->setPosition({size.width / 2.f - 143.f, 62.f});
+    scroll->setPosition({10.f, 62.f});
     scroll->m_contentLayer->setLayout(
         geode::ColumnLayout::create()
             ->setAutoScale(false)
@@ -343,6 +338,7 @@ bool NXRReplayPickerPopup::init(const std::string& title, const std::string& act
             ->setGap(6.f)
     );
     m_mainLayer->addChild(scroll);
+    m_mainLayer->addChild(NXR::Kit::ScrollGrip::create(scroll, size.width - 26.f, 62.f, 172.f, 22.f), 6);
 
     m_names = NXR::Bot::listMacros();
     std::sort(m_names.begin(), m_names.end());
@@ -440,7 +436,7 @@ bool NXRReplayBrowserPopup::init(const std::string& title, geode::Function<void(
     NXR::Modal::skin({m_mainLayer, m_bgSprite, m_closeBtn, m_buttonMenu}, title, size.width, size.height);
 
     auto* scroll = geode::prelude::ScrollLayer::create({296.f, 188.f});
-    scroll->setPosition({size.width / 2.f - 148.f, 62.f});
+    scroll->setPosition({8.f, 62.f});
     scroll->m_contentLayer->setLayout(
         geode::ColumnLayout::create()
             ->setAutoScale(false)
@@ -449,6 +445,7 @@ bool NXRReplayBrowserPopup::init(const std::string& title, geode::Function<void(
             ->setGap(6.f)
     );
     m_mainLayer->addChild(scroll);
+    m_mainLayer->addChild(NXR::Kit::ScrollGrip::create(scroll, size.width - 26.f, 62.f, 188.f, 22.f), 6);
 
     m_files = NXR::Bot::scanReplayFiles();
 

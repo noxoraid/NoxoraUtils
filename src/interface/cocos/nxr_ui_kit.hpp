@@ -16,6 +16,34 @@
 namespace NXR::Kit {
     using namespace geode::prelude;
 
+    class ScrollGrip : public CCLayer {
+    public:
+        static ScrollGrip* create(geode::ScrollLayer* target, float x, float y, float height, float zoneWidth);
+        void update(float dt) override;
+        bool ccTouchBegan(CCTouch* touch, CCEvent* event) override;
+        void ccTouchMoved(CCTouch* touch, CCEvent* event) override;
+        void ccTouchEnded(CCTouch* touch, CCEvent* event) override;
+        void ccTouchCancelled(CCTouch* touch, CCEvent* event) override;
+        void registerWithTouchDispatcher() override;
+
+    private:
+        bool init(geode::ScrollLayer* target, float x, float y, float height, float zoneWidth);
+        float range() const;
+        float thumbHeight() const;
+        void redraw();
+        void apply(const CCPoint& world, bool begin);
+        bool onTop() const;
+
+        geode::ScrollLayer* m_target = nullptr;
+        CCDrawNode* m_draw = nullptr;
+        float m_h = 0.f;
+        float m_zone = 0.f;
+        float m_grab = 0.f;
+        float m_shownY = 1e9f;
+        bool m_down = false;
+        bool m_shownDown = false;
+    };
+
     namespace Pal {
         inline ccColor3B hexOr(const char* key, const char* fallback) {
             return NXR::Utils::hexToColor(NXRConfig::get().get<std::string>(key, fallback));
@@ -180,6 +208,8 @@ namespace NXR::Kit {
         bool passthroughAt(const CCPoint& world);
         bool isInteracting() const { return m_mode != Mode::Idle; }
         void setSlop(float slop) { m_slop = slop; }
+        void setGutter(float width);
+        float contentWidth() const { return m_viewW - m_gutter; }
         size_t itemCount() const { return m_entries.size(); }
 
         void update(float dt) override;
@@ -190,6 +220,7 @@ namespace NXR::Kit {
             Pending,
             Scrolling,
             Captured,
+            Bar,
         };
 
         struct Entry {
@@ -207,8 +238,17 @@ namespace NXR::Kit {
         int entryAt(const CCPoint& world) const;
         CCPoint itemLocal(const CCPoint& world, const Entry& entry) const;
         void applyScrollPosition();
+        void redrawBar();
+        void dragBar(const CCPoint& world, bool begin);
+        bool inGutter(const CCPoint& world) const;
+        float thumbHeight() const;
 
         std::vector<Entry> m_entries;
+        CCDrawNode* m_bar = nullptr;
+        float m_gutter = 0.f;
+        float m_grab = 0.f;
+        float m_barScroll = -1.f;
+        int m_barState = -1;
         geode::ScrollLayer* m_clip = nullptr;
         float m_viewW = 0.f;
         float m_viewH = 0.f;

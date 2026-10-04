@@ -1,3 +1,8 @@
+# v1.4.18
+
+- **Change:** playback now runs on any level, even when the replay Level ID is different. The "Validate Level ID" option is removed and a running replay is no longer stopped when the level changes.
+- **Change:** the different-level notice is short and split into two lines (Replay ID and Level ID) instead of one long message.
+
 # v1.4.17
 
 - **Fix:** a replay recorded on one level no longer plays on another. Playback is refused when the Level ID differs (new "Validate Level ID" option in the bot settings, on by default) and a running replay stops with a message if the level changes.

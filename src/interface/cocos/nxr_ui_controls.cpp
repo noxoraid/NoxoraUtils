@@ -635,9 +635,9 @@ namespace NXR::Kit {
                 drawRound(m_bg, valueX0() + dp(4.f), py, dp(84.f), dp(36.f), dp(10.f), fillColor(11, 16, 26));
                 drawCircle(m_bg, minusX0() + dp(24.f), h * 0.5f, dp(15.f), m_pressed && m_zone == 1 ? fromColor(Pal::accent(), 0.5f) : fillColor(36, 48, 68));
                 drawCircle(m_bg, plusX0() + dp(24.f), h * 0.5f, dp(15.f), m_pressed && m_zone == 3 ? fromColor(Pal::accent(), 0.5f) : fillColor(36, 48, 68));
-                drawRound(m_bg, minusX0() + dp(24.f) - dp(7.f), h * 0.5f - 1.2f, dp(14.f), 2.4f, 1.2f, fillColor(232, 238, 246));
-                drawRound(m_bg, plusX0() + dp(24.f) - dp(7.f), h * 0.5f - 1.2f, dp(14.f), 2.4f, 1.2f, fillColor(232, 238, 246));
-                drawRound(m_bg, plusX0() + dp(24.f) - 1.2f, h * 0.5f - dp(7.f), 2.4f, dp(14.f), 1.2f, fillColor(232, 238, 246));
+                drawRound(m_bg, minusX0() + dp(24.f) - dp(7.f), h * 0.5f - 1.25f, dp(14.f), 2.5f, 0.f, fillColor(232, 238, 246));
+                drawRound(m_bg, plusX0() + dp(24.f) - dp(7.f), h * 0.5f - 1.25f, dp(14.f), 2.5f, 0.f, fillColor(232, 238, 246));
+                drawRound(m_bg, plusX0() + dp(24.f) - 1.25f, h * 0.5f - dp(7.f), 2.5f, dp(14.f), 0.f, fillColor(232, 238, 246));
             }
         public:
             NumberRowControl(Host* host, std::string label, bool integer, float min, float max, std::function<float()> get, std::function<void(float)> set)

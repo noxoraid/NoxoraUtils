@@ -50,10 +50,43 @@ namespace NXR::Kit {
     }
 
     namespace {
+        constexpr float kPi = 3.14159265f;
+
         float cornerInset(float d, float radius) {
-            if (d >= radius) return 0.f;
-            const float k = radius - d;
+            if (radius <= 0.f || d >= radius) return 0.f;
+            const float k = radius - std::max(d, 0.f);
             return radius - std::sqrt(std::max(0.f, radius * radius - k * k));
+        }
+
+        int arcSegments(float radius) {
+            return std::clamp(static_cast<int>(std::ceil(radius * 0.8f)) + 4, 8, 28);
+        }
+
+        void pushUnique(std::vector<CCPoint>& pts, const CCPoint& p) {
+            if (!pts.empty()) {
+                const CCPoint& q = pts.back();
+                if (std::fabs(q.x - p.x) < 0.01f && std::fabs(q.y - p.y) < 0.01f) return;
+            }
+            pts.push_back(p);
+        }
+
+        void finishPoly(std::vector<CCPoint>& pts) {
+            while (pts.size() > 1) {
+                const CCPoint& a = pts.front();
+                const CCPoint& b = pts.back();
+                if (std::fabs(a.x - b.x) < 0.01f && std::fabs(a.y - b.y) < 0.01f) pts.pop_back();
+                else break;
+            }
+        }
+
+        void fillPoly(CCDrawNode* node, std::vector<CCPoint>& pts, const ccColor4F& color) {
+            finishPoly(pts);
+            if (pts.size() < 3) return;
+            node->drawPolygon(pts.data(), static_cast<unsigned int>(pts.size()), color, 0.f, ccc4f(0.f, 0.f, 0.f, 0.f));
+        }
+
+        float crossInset(float pos, float start, float end, float radius) {
+            return std::max(cornerInset(pos - start, radius), cornerInset(end - pos, radius));
         }
     }
 
@@ -61,39 +94,48 @@ namespace NXR::Kit {
         if (!node || w <= 0.f || h <= 0.f) return;
         radius = std::clamp(radius, 0.f, std::min(w, h) * 0.5f);
         const float span = horizontal ? w : h;
-        const int count = std::clamp(static_cast<int>(span / 3.f), 8, 56);
+        const float cross = horizontal ? h : w;
+        const float start = horizontal ? x : y;
+        const float crossStart = horizontal ? y : x;
+        const int count = std::clamp(static_cast<int>(span / 2.f), 12, 120);
+        const float step = span / static_cast<float>(count);
+        const float overlap = 1.0f;
+
         for (int i = 0; i < count; i++) {
-            const float t0 = static_cast<float>(i) / static_cast<float>(count);
-            const float t1 = static_cast<float>(i + 1) / static_cast<float>(count);
-            const float tm = (t0 + t1) * 0.5f;
+            const float t = (static_cast<float>(i) + 0.5f) / static_cast<float>(count);
             const ccColor4F color = ccc4f(
-                from.r + (to.r - from.r) * tm,
-                from.g + (to.g - from.g) * tm,
-                from.b + (to.b - from.b) * tm,
-                from.a + (to.a - from.a) * tm);
-            CCPoint pts[4];
-            if (horizontal) {
-                const float x0 = x + w * t0;
-                const float x1 = x + w * t1 + (i + 1 < count ? 0.6f : 0.f);
-                const float in0 = std::max(cornerInset(x0 - x, radius), cornerInset(x + w - x0, radius));
-                const float in1 = std::max(cornerInset(x1 - x, radius), cornerInset(x + w - x1, radius));
-                const float inset = std::max(in0, in1);
-                pts[0] = CCPoint(x0, y + inset);
-                pts[1] = CCPoint(x1, y + inset);
-                pts[2] = CCPoint(x1, y + h - inset);
-                pts[3] = CCPoint(x0, y + h - inset);
-            } else {
-                const float yTop = y + h - h * t0;
-                const float yBot = y + h - h * t1 - (i + 1 < count ? 0.6f : 0.f);
-                const float in0 = std::max(cornerInset(yTop - y, radius), cornerInset(y + h - yTop, radius));
-                const float in1 = std::max(cornerInset(yBot - y, radius), cornerInset(y + h - yBot, radius));
-                const float inset = std::max(in0, in1);
-                pts[0] = CCPoint(x + inset, yBot);
-                pts[1] = CCPoint(x + w - inset, yBot);
-                pts[2] = CCPoint(x + w - inset, yTop);
-                pts[3] = CCPoint(x + inset, yTop);
+                from.r + (to.r - from.r) * t,
+                from.g + (to.g - from.g) * t,
+                from.b + (to.b - from.b) * t,
+                from.a + (to.a - from.a) * t);
+
+            float a0 = start + step * static_cast<float>(i);
+            float a1 = start + step * static_cast<float>(i + 1);
+            if (i + 1 < count) a1 += overlap;
+            a1 = std::min(a1, start + span);
+
+            std::vector<float> samples;
+            samples.push_back(a0);
+            const bool inCorner = radius > 0.5f && (a0 < start + radius || a1 > start + span - radius);
+            if (inCorner) {
+                for (int k = 1; k < 4; k++) samples.push_back(a0 + (a1 - a0) * static_cast<float>(k) / 4.f);
             }
-            node->drawPolygon(pts, 4, color, 0.f, ccc4f(0.f, 0.f, 0.f, 0.f));
+            samples.push_back(a1);
+
+            std::vector<CCPoint> poly;
+            for (float a : samples) {
+                const float inset = crossInset(a, start, start + span, radius);
+                const float c = crossStart + inset;
+                poly.push_back(horizontal ? CCPoint(a, c) : CCPoint(c, a));
+            }
+            for (auto it = samples.rbegin(); it != samples.rend(); ++it) {
+                const float inset = crossInset(*it, start, start + span, radius);
+                const float c = crossStart + cross - inset;
+                pushUnique(poly, horizontal ? CCPoint(*it, c) : CCPoint(c, *it));
+            }
+            std::vector<CCPoint> clean;
+            for (auto& p : poly) pushUnique(clean, p);
+            fillPoly(node, clean, color);
         }
     }
 
@@ -116,33 +158,30 @@ namespace NXR::Kit {
             points.push_back(CCPoint(x + w, y + h));
             points.push_back(CCPoint(x, y + h));
         } else {
-            constexpr int segments = 6;
-            constexpr float pi = 3.14159265f;
-            auto arc = [&](float cx, float cy, float start) {
+            const int segments = arcSegments(radius);
+            auto arc = [&](float cx, float cy, float startAngle) {
                 for (int i = 0; i <= segments; i++) {
-                    const float angle = start + (pi * 0.5f) * static_cast<float>(i) / static_cast<float>(segments);
-                    points.push_back(CCPoint(cx + radius * std::cos(angle), cy + radius * std::sin(angle)));
+                    const float angle = startAngle + (kPi * 0.5f) * static_cast<float>(i) / static_cast<float>(segments);
+                    pushUnique(points, CCPoint(cx + radius * std::cos(angle), cy + radius * std::sin(angle)));
                 }
             };
-            arc(x + w - radius, y + radius, -pi * 0.5f);
+            arc(x + w - radius, y + radius, -kPi * 0.5f);
             arc(x + w - radius, y + h - radius, 0.f);
-            arc(x + radius, y + h - radius, pi * 0.5f);
-            arc(x + radius, y + radius, pi);
+            arc(x + radius, y + h - radius, kPi * 0.5f);
+            arc(x + radius, y + radius, kPi);
         }
-
-        node->drawPolygon(points.data(), static_cast<unsigned int>(points.size()), color, 0.f, ccc4f(0.f, 0.f, 0.f, 0.f));
+        fillPoly(node, points, color);
     }
 
     void drawCircle(CCDrawNode* node, float cx, float cy, float radius, const ccColor4F& color) {
         if (!node || radius <= 0.f) return;
-        constexpr int segments = 20;
-        constexpr float pi = 3.14159265f;
+        const int segments = std::clamp(static_cast<int>(std::ceil(radius * 2.2f)) + 8, 24, 72);
         std::vector<CCPoint> points;
         for (int i = 0; i < segments; i++) {
-            const float angle = 2.f * pi * static_cast<float>(i) / static_cast<float>(segments);
-            points.push_back(CCPoint(cx + radius * std::cos(angle), cy + radius * std::sin(angle)));
+            const float angle = 2.f * kPi * static_cast<float>(i) / static_cast<float>(segments);
+            pushUnique(points, CCPoint(cx + radius * std::cos(angle), cy + radius * std::sin(angle)));
         }
-        node->drawPolygon(points.data(), static_cast<unsigned int>(points.size()), color, 0.f, ccc4f(0.f, 0.f, 0.f, 0.f));
+        fillPoly(node, points, color);
     }
 
     float lineHeightUnit() {
@@ -219,6 +258,137 @@ namespace NXR::Kit {
         return lines;
     }
 
+    ScrollGrip* ScrollGrip::create(geode::ScrollLayer* target, float x, float y, float height, float zoneWidth) {
+        auto* ret = new ScrollGrip();
+        if (ret->init(target, x, y, height, zoneWidth)) {
+            ret->autorelease();
+            return ret;
+        }
+        delete ret;
+        return nullptr;
+    }
+
+    bool ScrollGrip::init(geode::ScrollLayer* target, float x, float y, float height, float zoneWidth) {
+        if (!CCLayer::init()) return false;
+        m_target = target;
+        m_h = height;
+        m_zone = zoneWidth;
+        this->ignoreAnchorPointForPosition(false);
+        this->setAnchorPoint(CCPoint(0.f, 0.f));
+        this->setContentSize(CCSize(zoneWidth, height));
+        this->setPosition(CCPoint(x, y));
+        this->setTouchEnabled(true);
+        m_draw = CCDrawNode::create();
+        this->addChild(m_draw);
+        this->scheduleUpdate();
+        redraw();
+        return true;
+    }
+
+    void ScrollGrip::registerWithTouchDispatcher() {
+        CCDirector::sharedDirector()->getTouchDispatcher()->addTargetedDelegate(this, -640, true);
+    }
+
+    float ScrollGrip::range() const {
+        if (!m_target) return 0.f;
+        return std::max(0.f, m_target->m_contentLayer->getContentHeight() - m_target->getContentHeight());
+    }
+
+    float ScrollGrip::thumbHeight() const {
+        const float content = m_target ? m_target->m_contentLayer->getContentHeight() : 1.f;
+        const float view = m_target ? m_target->getContentHeight() : 1.f;
+        const float track = m_h - m_zone;
+        const float ratio = content > 0.f ? view / content : 1.f;
+        return std::clamp(track * ratio, m_zone * 2.4f, track);
+    }
+
+    void ScrollGrip::redraw() {
+        m_draw->clear();
+        const float r = range();
+        if (!m_target || r <= 0.5f) {
+            m_shownY = 1e9f;
+            return;
+        }
+        const float y = m_target->m_contentLayer->getPositionY();
+        m_shownY = y;
+        m_shownDown = m_down;
+        const float pad = m_zone * 0.5f;
+        const float track = m_h - pad * 2.f;
+        const float th = thumbHeight();
+        const float frac = std::clamp(1.f + y / r, 0.f, 1.f);
+        const float top = m_h - pad - frac * (track - th);
+        const float tw = m_zone * (m_down ? 0.62f : 0.5f);
+        const float trackW = m_zone * 0.46f;
+        const float cx = m_zone * 0.5f;
+        drawRound(m_draw, cx - trackW * 0.5f, pad, trackW, track, trackW * 0.5f, fillColor(255, 255, 255, m_down ? 0.14f : 0.08f));
+        drawRound(m_draw, cx - tw * 0.5f, top - th, tw, th, tw * 0.5f, fromColor(Pal::accent(), m_down ? 1.f : 0.65f));
+    }
+
+    void ScrollGrip::update(float) {
+        if (!m_target) return;
+        const float y = m_target->m_contentLayer->getPositionY();
+        if (std::fabs(y - m_shownY) > 0.01f || m_down != m_shownDown) redraw();
+    }
+
+    bool ScrollGrip::onTop() const {
+        auto* scene = CCDirector::sharedDirector()->getRunningScene();
+        if (!scene) return false;
+        const CCNode* root = this;
+        while (root->getParent() && root->getParent() != scene) root = root->getParent();
+        if (root->getParent() != scene) return false;
+        auto* kids = scene->getChildren();
+        if (!kids || kids->count() == 0) return false;
+        return kids->lastObject() == root;
+    }
+
+    void ScrollGrip::apply(const CCPoint& world, bool begin) {
+        const float r = range();
+        if (!m_target || r <= 0.5f) return;
+        const CCPoint local = this->convertToNodeSpace(world);
+        const float pad = m_zone * 0.5f;
+        const float track = m_h - pad * 2.f;
+        const float th = thumbHeight();
+        const float span = std::max(1.f, track - th);
+        const float frac = std::clamp(1.f + m_target->m_contentLayer->getPositionY() / r, 0.f, 1.f);
+        const float top = m_h - pad - frac * span;
+        if (begin) {
+            if (local.y <= top && local.y >= top - th) m_grab = top - local.y;
+            else m_grab = th * 0.5f;
+        }
+        const float f = std::clamp((m_h - pad - (local.y + m_grab)) / span, 0.f, 1.f);
+        m_target->m_contentLayer->setPositionY(-r * (1.f - f));
+    }
+
+    bool ScrollGrip::ccTouchBegan(CCTouch* touch, CCEvent*) {
+        if (!m_target || !this->isVisible() || range() <= 0.5f) return false;
+        for (CCNode* n = this; n; n = n->getParent()) {
+            if (!n->isVisible()) return false;
+        }
+        if (!onTop()) return false;
+        const CCPoint world = touch->getLocation();
+        const CCPoint local = this->convertToNodeSpace(world);
+        if (local.x < -m_zone * 0.2f || local.x > m_zone * 1.2f || local.y < 0.f || local.y > m_h) return false;
+        m_down = true;
+        apply(world, true);
+        redraw();
+        return true;
+    }
+
+    void ScrollGrip::ccTouchMoved(CCTouch* touch, CCEvent*) {
+        if (!m_down) return;
+        apply(touch->getLocation(), false);
+    }
+
+    void ScrollGrip::ccTouchEnded(CCTouch*, CCEvent*) {
+        m_down = false;
+        redraw();
+    }
+
+    void ScrollGrip::ccTouchCancelled(CCTouch*, CCEvent*) {
+        m_down = false;
+        redraw();
+    }
+
     PanelList* PanelList::create(const CCSize& size, bool virtualize) {
         auto* ret = new PanelList();
         if (ret->init(size, virtualize)) {
@@ -249,8 +419,70 @@ namespace NXR::Kit {
         m_clip->m_contentLayer->setAnchorPoint(CCPoint(0.f, 0.f));
         this->addChild(m_clip);
 
+        m_bar = CCDrawNode::create();
+        this->addChild(m_bar, 5);
+
         this->scheduleUpdate();
         return true;
+    }
+
+    void PanelList::setGutter(float width) {
+        m_gutter = std::max(0.f, width);
+        m_clip->setContentSize(CCSize(contentWidth(), m_viewH));
+        m_barScroll = -1.f;
+    }
+
+    bool PanelList::inGutter(const CCPoint& world) const {
+        if (m_gutter <= 0.f || maxScroll() <= 0.5f) return false;
+        const CCPoint local = this->convertToNodeSpace(world);
+        return local.x >= m_viewW - m_gutter - m_gutter * 0.25f;
+    }
+
+    float PanelList::thumbHeight() const {
+        const float track = m_viewH - m_gutter;
+        const float ratio = m_contentH > 0.f ? m_viewH / m_contentH : 1.f;
+        return std::clamp(track * ratio, m_gutter * 2.6f, track);
+    }
+
+    void PanelList::dragBar(const CCPoint& world, bool begin) {
+        const CCPoint local = this->convertToNodeSpace(world);
+        const float pad = m_gutter * 0.5f;
+        const float track = m_viewH - pad * 2.f;
+        const float th = thumbHeight();
+        const float range = std::max(1.f, track - th);
+        const float frac = std::clamp(m_scroll / std::max(1.f, maxScroll()), 0.f, 1.f);
+        const float thumbTop = m_viewH - pad - frac * range;
+        if (begin) {
+            if (local.y <= thumbTop && local.y >= thumbTop - th) m_grab = thumbTop - local.y;
+            else m_grab = th * 0.5f;
+        }
+        const float newTop = local.y + m_grab;
+        const float f = std::clamp((m_viewH - pad - newTop) / range, 0.f, 1.f);
+        m_scroll = f * maxScroll();
+        applyScrollPosition();
+        refreshVisible();
+    }
+
+    void PanelList::redrawBar() {
+        if (!m_bar) return;
+        const int state = m_mode == Mode::Bar ? 1 : 0;
+        if (std::fabs(m_barScroll - m_scroll) < 0.01f && m_barState == state) return;
+        m_barScroll = m_scroll;
+        m_barState = state;
+        m_bar->clear();
+        if (m_gutter <= 0.f || maxScroll() <= 0.5f) return;
+        const float pad = m_gutter * 0.5f;
+        const float trackW = m_gutter * 0.46f;
+        const float trackX = m_viewW - m_gutter * 0.5f - trackW * 0.5f;
+        const float track = m_viewH - pad * 2.f;
+        const float th = thumbHeight();
+        const float range = std::max(1.f, track - th);
+        const float frac = std::clamp(m_scroll / std::max(1.f, maxScroll()), 0.f, 1.f);
+        const float thumbTop = m_viewH - pad - frac * range;
+        drawRound(m_bar, trackX, pad, trackW, track, trackW * 0.5f, fillColor(255, 255, 255, state ? 0.12f : 0.07f));
+        const float tw = trackW + (state ? m_gutter * 0.12f : 0.f);
+        const float tx = m_viewW - m_gutter * 0.5f - tw * 0.5f;
+        drawRound(m_bar, tx, thumbTop - th, tw, th, tw * 0.5f, fromColor(Pal::accent(), state ? 1.f : 0.62f));
     }
 
     float PanelList::maxScroll() const {
@@ -269,6 +501,7 @@ namespace NXR::Kit {
         m_spring = false;
         m_velocity = 0.f;
         m_scroll = 0.f;
+        m_barScroll = -1.f;
 
         clearEntries();
 
@@ -276,7 +509,7 @@ namespace NXR::Kit {
         for (auto& item : items) {
             Entry entry;
             entry.control = std::move(item);
-            entry.control->setWidth(m_viewW);
+            entry.control->setWidth(contentWidth());
             entry.height = entry.control->height();
             entry.top = y;
             y += entry.height;
@@ -284,7 +517,7 @@ namespace NXR::Kit {
         }
 
         m_contentH = std::max(y + bottomPad, m_viewH);
-        m_clip->m_contentLayer->setContentSize(CCSize(m_viewW, m_contentH));
+        m_clip->m_contentLayer->setContentSize(CCSize(contentWidth(), m_contentH));
         applyScrollPosition();
         refreshVisible();
     }
@@ -294,11 +527,11 @@ namespace NXR::Kit {
 
         auto* node = CCNode::create();
         node->setAnchorPoint(CCPoint(0.f, 0.f));
-        node->setContentSize(CCSize(m_viewW, entry.height));
+        node->setContentSize(CCSize(contentWidth(), entry.height));
         node->setPosition(CCPoint(0.f, m_contentH - entry.top - entry.height));
         m_clip->m_contentLayer->addChild(node);
         entry.view = node;
-        entry.control->build(node, m_viewW);
+        entry.control->build(node, contentWidth());
     }
 
     void PanelList::destroyEntry(Entry& entry) {
@@ -324,6 +557,7 @@ namespace NXR::Kit {
     }
 
     void PanelList::setScroll(float value) {
+        m_barScroll = -1.f;
         m_scroll = std::clamp(value, 0.f, maxScroll());
         applyScrollPosition();
         refreshVisible();
@@ -369,6 +603,12 @@ namespace NXR::Kit {
         m_active = -1;
         m_touchKind = Control::Touch::None;
 
+        if (inGutter(world)) {
+            m_mode = Mode::Bar;
+            dragBar(world, true);
+            return true;
+        }
+
         const int index = entryAt(world);
         if (index >= 0) {
             auto& entry = m_entries[static_cast<size_t>(index)];
@@ -386,6 +626,11 @@ namespace NXR::Kit {
 
     void PanelList::onTouchMoved(const CCPoint& world) {
         if (m_mode == Mode::Idle) return;
+
+        if (m_mode == Mode::Bar) {
+            dragBar(world, false);
+            return;
+        }
 
         if (m_mode == Mode::Captured) {
             if (m_active >= 0 && m_active < static_cast<int>(m_entries.size())) {
@@ -436,6 +681,8 @@ namespace NXR::Kit {
         const Mode mode = m_mode;
         m_mode = Mode::Idle;
 
+        if (mode == Mode::Bar) return;
+
         if (mode == Mode::Captured) {
             if (m_active >= 0 && m_active < static_cast<int>(m_entries.size())) {
                 auto& entry = m_entries[static_cast<size_t>(m_active)];
@@ -474,6 +721,8 @@ namespace NXR::Kit {
         const Mode mode = m_mode;
         m_mode = Mode::Idle;
 
+        if (mode == Mode::Bar) return;
+
         if ((mode == Mode::Pending || mode == Mode::Captured) && m_active >= 0 && m_active < static_cast<int>(m_entries.size())) {
             auto& entry = m_entries[static_cast<size_t>(m_active)];
             if (entry.view) entry.control->touchCancelled();
@@ -485,7 +734,7 @@ namespace NXR::Kit {
     void PanelList::update(float dt) {
         if (dt > 0.1f) dt = 0.1f;
 
-        if (m_mode != Mode::Scrolling) {
+        if (m_mode != Mode::Scrolling && m_mode != Mode::Bar) {
             if (m_spring) {
                 const float target = std::clamp(m_scroll, 0.f, maxScroll());
                 m_scroll += (target - m_scroll) * std::min(1.f, dt * 14.f);
@@ -513,6 +762,8 @@ namespace NXR::Kit {
                 refreshVisible();
             }
         }
+
+        redrawBar();
 
         for (auto& entry : m_entries) {
             if (entry.view) entry.control->tick(dt);

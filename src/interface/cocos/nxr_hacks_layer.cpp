@@ -413,6 +413,7 @@ void NXRHacksLayer::buildUi() {
     m_body = PanelList::create(CCSize(m_pw - rail, m_ph - headerH));
     m_body->setPosition(CCPoint(rail, 0.f));
     m_body->setSlop(dp(8.f));
+    m_body->setGutter(dp(26.f));
     m_panel->addChild(m_body, 1);
 
     const auto names = tabNames();
@@ -1138,6 +1139,7 @@ void NXRHacksLayer::renderSheet() {
     m_sheetList = PanelList::create(CCSize(sw, m_ph - headerH - footerH));
     m_sheetList->setPosition(CCPoint(0.f, footerH));
     m_sheetList->setSlop(dp(8.f));
+    m_sheetList->setGutter(dp(26.f));
     m_sheetContent->addChild(m_sheetList);
     m_sheetList->setItems(page->build(*page), dp(6.f), dp(16.f));
     m_sheetList->setScroll(page->scroll);
