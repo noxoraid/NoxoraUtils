@@ -392,7 +392,7 @@ void NXRHacksLayer::buildUi() {
         m_panel->addChild(logo, 2);
     }
 
-    m_rail = ListView::create(CCSize(rail, m_ph - dp(60.f)));
+    m_rail = PanelList::create(CCSize(rail, m_ph - dp(60.f)));
     m_rail->setPosition(CCPoint(0.f, 0.f));
     m_rail->setSlop(dp(8.f));
     m_panel->addChild(m_rail, 1);
@@ -402,7 +402,7 @@ void NXRHacksLayer::buildUi() {
     m_header->setContentSize(CCSize(m_pw - rail, headerH));
     m_panel->addChild(m_header, 2);
 
-    m_body = ListView::create(CCSize(m_pw - rail, m_ph - headerH));
+    m_body = PanelList::create(CCSize(m_pw - rail, m_ph - headerH));
     m_body->setPosition(CCPoint(rail, 0.f));
     m_body->setSlop(dp(8.f));
     m_panel->addChild(m_body, 1);
@@ -1080,7 +1080,7 @@ void NXRHacksLayer::renderSheet() {
     m_sheetContent->addChild(close, 2);
     m_sheetZones.push_back({CCRect(target.x + sw - dp(52.f), target.y + m_ph - headerH, dp(52.f), headerH), guarded([this] { this->closeSheet(); })});
 
-    m_sheetList = ListView::create(CCSize(sw, m_ph - headerH - footerH));
+    m_sheetList = PanelList::create(CCSize(sw, m_ph - headerH - footerH));
     m_sheetList->setPosition(CCPoint(0.f, footerH));
     m_sheetList->setSlop(dp(8.f));
     m_sheetContent->addChild(m_sheetList);

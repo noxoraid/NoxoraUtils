@@ -145,15 +145,15 @@ namespace NXR::Kit {
 
     using ControlPtr = std::shared_ptr<Control>;
 
-    class ListView : public CCNode {
+    class PanelList : public CCNode {
     public:
-        static ListView* create(const CCSize& size, bool virtualize = true);
+        static PanelList* create(const CCSize& size, bool virtualize = true);
 
         void setItems(std::vector<ControlPtr> items, float topPad = 0.f, float bottomPad = 0.f);
         void setScroll(float value);
         float getScroll() const { return m_scroll; }
         float maxScroll() const;
-        bool containsWorld(const CCPoint& world) const;
+        bool containsWorld(const CCPoint& world);
         bool onTouchBegan(const CCPoint& world);
         void onTouchMoved(const CCPoint& world);
         void onTouchEnded(const CCPoint& world);

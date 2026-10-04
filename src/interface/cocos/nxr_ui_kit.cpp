@@ -161,8 +161,8 @@ namespace NXR::Kit {
         return lines;
     }
 
-    ListView* ListView::create(const CCSize& size, bool virtualize) {
-        auto* ret = new ListView();
+    PanelList* PanelList::create(const CCSize& size, bool virtualize) {
+        auto* ret = new PanelList();
         if (ret->init(size, virtualize)) {
             ret->autorelease();
             return ret;
@@ -171,7 +171,7 @@ namespace NXR::Kit {
         return nullptr;
     }
 
-    bool ListView::init(const CCSize& size, bool virtualize) {
+    bool PanelList::init(const CCSize& size, bool virtualize) {
         if (!CCNode::init()) return false;
 
         m_viewW = size.width;
@@ -195,16 +195,16 @@ namespace NXR::Kit {
         return true;
     }
 
-    float ListView::maxScroll() const {
+    float PanelList::maxScroll() const {
         return std::max(0.f, m_contentH - m_viewH);
     }
 
-    void ListView::clearEntries() {
+    void PanelList::clearEntries() {
         for (auto& entry : m_entries) destroyEntry(entry);
         m_entries.clear();
     }
 
-    void ListView::setItems(std::vector<ControlPtr> items, float topPad, float bottomPad) {
+    void PanelList::setItems(std::vector<ControlPtr> items, float topPad, float bottomPad) {
         m_mode = Mode::Idle;
         m_active = -1;
         m_inertia = false;
@@ -231,7 +231,7 @@ namespace NXR::Kit {
         refreshVisible();
     }
 
-    void ListView::buildEntry(Entry& entry) {
+    void PanelList::buildEntry(Entry& entry) {
         if (entry.view) return;
 
         auto* node = CCNode::create();
@@ -243,18 +243,18 @@ namespace NXR::Kit {
         entry.control->build(node, m_viewW);
     }
 
-    void ListView::destroyEntry(Entry& entry) {
+    void PanelList::destroyEntry(Entry& entry) {
         if (!entry.view) return;
         entry.control->release();
         entry.view->removeFromParent();
         entry.view = nullptr;
     }
 
-    void ListView::applyScrollPosition() {
+    void PanelList::applyScrollPosition() {
         m_clip->m_contentLayer->setPosition(CCPoint(0.f, m_viewH - m_contentH + m_scroll));
     }
 
-    void ListView::refreshVisible() {
+    void PanelList::refreshVisible() {
         const float margin = m_virtualize ? 90.f : 1e9f;
         const float top = m_scroll - margin;
         const float bottom = m_scroll + m_viewH + margin;
@@ -265,18 +265,18 @@ namespace NXR::Kit {
         }
     }
 
-    void ListView::setScroll(float value) {
+    void PanelList::setScroll(float value) {
         m_scroll = std::clamp(value, 0.f, maxScroll());
         applyScrollPosition();
         refreshVisible();
     }
 
-    bool ListView::containsWorld(const CCPoint& world) const {
+    bool PanelList::containsWorld(const CCPoint& world) {
         const CCPoint local = this->convertToNodeSpace(world);
         return local.x >= 0.f && local.y >= 0.f && local.x <= m_viewW && local.y <= m_viewH;
     }
 
-    int ListView::entryAt(const CCPoint& world) const {
+    int PanelList::entryAt(const CCPoint& world) const {
         const CCPoint local = m_clip->m_contentLayer->convertToNodeSpace(world);
         for (size_t i = 0; i < m_entries.size(); i++) {
             const auto& entry = m_entries[i];
@@ -286,12 +286,12 @@ namespace NXR::Kit {
         return -1;
     }
 
-    CCPoint ListView::itemLocal(const CCPoint& world, const Entry& entry) const {
+    CCPoint PanelList::itemLocal(const CCPoint& world, const Entry& entry) const {
         const CCPoint local = m_clip->m_contentLayer->convertToNodeSpace(world);
         return CCPoint(local.x, local.y - (m_contentH - entry.top - entry.height));
     }
 
-    bool ListView::passthroughAt(const CCPoint& world) {
+    bool PanelList::passthroughAt(const CCPoint& world) {
         if (!containsWorld(world)) return false;
         const int index = entryAt(world);
         if (index < 0) return false;
@@ -300,7 +300,7 @@ namespace NXR::Kit {
         return entry.control->passthrough(itemLocal(world, entry));
     }
 
-    bool ListView::onTouchBegan(const CCPoint& world) {
+    bool PanelList::onTouchBegan(const CCPoint& world) {
         m_velocity = 0.f;
         m_inertia = false;
         m_spring = false;
@@ -326,7 +326,7 @@ namespace NXR::Kit {
         return true;
     }
 
-    void ListView::onTouchMoved(const CCPoint& world) {
+    void PanelList::onTouchMoved(const CCPoint& world) {
         if (m_mode == Mode::Idle) return;
 
         if (m_mode == Mode::Captured) {
@@ -374,7 +374,7 @@ namespace NXR::Kit {
         m_lastTime = now;
     }
 
-    void ListView::onTouchEnded(const CCPoint& world) {
+    void PanelList::onTouchEnded(const CCPoint& world) {
         const Mode mode = m_mode;
         m_mode = Mode::Idle;
 
@@ -412,7 +412,7 @@ namespace NXR::Kit {
         m_active = -1;
     }
 
-    void ListView::onTouchCancelled() {
+    void PanelList::onTouchCancelled() {
         const Mode mode = m_mode;
         m_mode = Mode::Idle;
 
@@ -424,7 +424,7 @@ namespace NXR::Kit {
         m_active = -1;
     }
 
-    void ListView::update(float dt) {
+    void PanelList::update(float dt) {
         if (dt > 0.1f) dt = 0.1f;
 
         if (m_mode != Mode::Scrolling) {

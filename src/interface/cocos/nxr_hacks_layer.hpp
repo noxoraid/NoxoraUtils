@@ -68,7 +68,7 @@ private:
         Sheet,
     };
 
-    bool init();
+    bool init() override;
     void buildUi();
     void buildHeader();
     void buildRail();
@@ -112,12 +112,12 @@ private:
     cocos2d::CCNode* m_panel = nullptr;
     cocos2d::CCDrawNode* m_bgDraw = nullptr;
     cocos2d::CCNode* m_header = nullptr;
-    NXR::Kit::ListView* m_rail = nullptr;
-    NXR::Kit::ListView* m_body = nullptr;
+    NXR::Kit::PanelList* m_rail = nullptr;
+    NXR::Kit::PanelList* m_body = nullptr;
 
     cocos2d::CCNode* m_sheet = nullptr;
     cocos2d::CCNode* m_sheetContent = nullptr;
-    NXR::Kit::ListView* m_sheetList = nullptr;
+    NXR::Kit::PanelList* m_sheetList = nullptr;
     std::vector<std::shared_ptr<Page>> m_pages;
     std::vector<Zone> m_zones;
     std::vector<Zone> m_sheetZones;
