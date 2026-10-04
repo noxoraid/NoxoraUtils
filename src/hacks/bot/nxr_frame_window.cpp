@@ -16,6 +16,7 @@
 #include "../../core/nxr_safe_hook.hpp"
 #include "../../core/nxr_config.hpp"
 #include "../../core/nxr_practice_fix.hpp"
+#include "../../core/nxr_lstar.hpp"
 #include "../../interface/cocos/nxr_hack_settings_popup.hpp"
 
 using namespace geode::prelude;
@@ -40,10 +41,23 @@ namespace {
     constexpr const char* kHorizonKey = "nxr.bot.frame_window_counter::horizon";
     constexpr const char* kMaxKey = "nxr.bot.frame_window_counter::max_window";
     constexpr const char* kMarkSizeKey = "nxr.bot.frame_window_counter::mark_size";
+    constexpr const char* kLStarKey = "nxr.bot.frame_window_counter::lstar";
+    constexpr const char* kRespawnKey = "nxr.bot.frame_window_counter::lstar_respawn";
+    constexpr const char* kTargetKey = "nxr.bot.frame_window_counter::lstar_target_hours";
+    constexpr std::array<const char*, NXR::LStar::kMetrics> kMetricKeys = {
+        "nxr.bot.frame_window_counter::lstar_base", "nxr.bot.frame_window_counter::lstar_nerve",
+        "nxr.bot.frame_window_counter::lstar_fatigue", "nxr.bot.frame_window_counter::lstar_cps",
+        "nxr.bot.frame_window_counter::lstar_nerve_fatigue", "nxr.bot.frame_window_counter::lstar_nerve_cps",
+        "nxr.bot.frame_window_counter::lstar_fatigue_cps", "nxr.bot.frame_window_counter::lstar_all",
+    };
+    constexpr std::array<const char*, NXR::LStar::kMetrics> kMetricNames = {
+        "L*: ", "Nerve L*: ", "Fatigue L*: ", "CPS L*: ", "Nerve+Fatigue L*: ", "Nerve+CPS L*: ", "Fatigue+CPS L*: ", "Nerve+Fatigue+CPS L*: ",
+    };
 
     constexpr int kRows = 8;
-    constexpr size_t kRing = 512;
+    constexpr size_t kRing = 1024;
     constexpr int kSimsPerFrame = 8;
+    constexpr int kMaxExtraSims = 24;
     constexpr std::array<int, kRows - 1> kFpsSteps = {20, 30, 45, 60, 90, 120, 240};
 
     struct Frame {
@@ -124,6 +138,12 @@ namespace {
     std::array<int, kRows> g_counts{};
     std::array<Row, kRows> g_rows{};
     Ref<CCNode> g_hud;
+    Ref<CCNode> g_lstarNode;
+    std::array<double, NXR::LStar::kMetrics> g_lstar{};
+    bool g_lstarValid = false;
+    bool g_lstarDirty = false;
+    bool g_lstarRedraw = true;
+    float g_lstarTimer = 0.f;
     Sim g_sim;
     uint64_t g_tick = 0;
     uint64_t g_lastRelease = 0;
@@ -200,6 +220,78 @@ namespace {
         g_hud = nullptr;
         g_rows.fill(Row{});
         g_hudDirty = true;
+    }
+
+    bool lstarEnabled() { return NXRConfig::get().get<bool>(kLStarKey, false); }
+
+    void dropLStar() {
+        if (g_lstarNode) g_lstarNode->removeFromParent();
+        g_lstarNode = nullptr;
+        g_lstarRedraw = true;
+    }
+
+    void recalcLStar() {
+        std::vector<NXR::LStar::Click> clicks;
+        for (const auto& [key, result] : store()) {
+            if (!g_shown.contains(key)) continue;
+            NXR::LStar::Click click;
+            click.key = key;
+            click.window = static_cast<double>(result.ticks);
+            clicks.push_back(click);
+        }
+
+        g_lstarDirty = false;
+        g_lstarRedraw = true;
+        if (clicks.empty()) {
+            g_lstarValid = false;
+            return;
+        }
+
+        auto& config = NXRConfig::get();
+        NXR::LStar::Params params;
+        params.fps = static_cast<double>(tps());
+        params.respawn = static_cast<double>(std::clamp(config.get<float>(kRespawnKey, 0.f), 0.f, 60.f));
+        params.target = static_cast<double>(std::clamp(config.get<int>(kTargetKey, 24), 1, 168)) * 3600.0;
+        g_lstar = NXR::LStar::compute(clicks, params);
+        g_lstarValid = true;
+    }
+
+    void updateLStar(PlayLayer* pl, float dt) {
+        if (!pl || !pl->m_uiLayer) return;
+        if (!lstarEnabled()) {
+            if (g_lstarNode) dropLStar();
+            return;
+        }
+
+        g_lstarTimer += dt;
+        if (g_lstarDirty && g_lstarTimer >= 0.5f) {
+            g_lstarTimer = 0.f;
+            recalcLStar();
+        }
+
+        if (g_lstarNode && g_lstarNode->getParent() != pl->m_uiLayer) dropLStar();
+        if (g_lstarNode && !g_lstarRedraw) return;
+        if (g_lstarNode) dropLStar();
+
+        g_lstarRedraw = false;
+        auto* root = CCNode::create();
+        root->setPosition(CCPoint(5.f, 5.f));
+        root->setZOrder(9999);
+
+        float y = 0.f;
+        for (int i = NXR::LStar::kMetrics - 1; i >= 0; i--) {
+            const size_t index = static_cast<size_t>(i);
+            if (!NXRConfig::get().get<bool>(kMetricKeys[index], i == 0)) continue;
+            const std::string text = std::string(kMetricNames[index]) + (g_lstarValid ? fmt::format("{:.2f}", g_lstar[index]) : std::string("0.00"));
+            auto* label = CCLabelBMFont::create(text.c_str(), "bigFont.fnt");
+            label->setAnchorPoint(CCPoint(0.f, 0.f));
+            label->setPosition(CCPoint(0.f, y));
+            label->setScale(0.3f);
+            root->addChild(label);
+            y += 12.f;
+        }
+        pl->m_uiLayer->addChild(root);
+        g_lstarNode = root;
     }
 
     void refreshHud() {
@@ -371,6 +463,7 @@ namespace {
             g_shown.insert(key);
         }
         g_hudDirty = true;
+        g_lstarDirty = true;
     }
 
     void showResult(PlayLayer* pl, int64_t key, const Result& result, bool sound) {
@@ -391,6 +484,7 @@ namespace {
         result.capped = capped;
         result.pos = pos;
         store()[key] = result;
+        g_lstarDirty = true;
         showResult(pl, key, result, sound);
     }
 
@@ -500,7 +594,8 @@ namespace {
         }
 
         if (job.phase == 1) {
-            if (job.hi - job.lo <= 1) {
+            const int candidate = job.lo + 1;
+            if (candidate >= job.hi || !survives(pl, job, candidate)) {
                 job.late = job.lo;
                 int maxEarly = job.window;
                 if (job.prevRelease > 0) maxEarly = static_cast<int>(std::clamp<int64_t>(t - static_cast<int64_t>(job.prevRelease) - 1, 0, job.window));
@@ -509,23 +604,20 @@ namespace {
                 job.hi = maxEarly + 1;
                 return;
             }
-            const int mid = (job.lo + job.hi) / 2;
-            if (survives(pl, job, mid)) job.lo = mid;
-            else job.hi = mid;
+            job.lo = candidate;
             return;
         }
 
         if (job.phase == 2) {
-            if (job.hi - job.lo <= 1) {
+            const int candidate = job.lo + 1;
+            if (candidate >= job.hi || !survives(pl, job, -candidate)) {
                 job.early = job.lo;
                 const bool capped = job.late >= job.window || job.early >= job.window;
                 storeResult(pl, job.key, job.late + job.early + 1, capped, job.pos, false);
                 job.phase = 9;
                 return;
             }
-            const int mid = (job.lo + job.hi) / 2;
-            if (survives(pl, job, -mid)) job.lo = mid;
-            else job.hi = mid;
+            job.lo = candidate;
             return;
         }
     }
@@ -536,7 +628,7 @@ namespace {
             g_jobs.clear();
             return;
         }
-        int budget = kSimsPerFrame;
+        int budget = kSimsPerFrame + std::min(static_cast<int>(g_jobs.size()) * 2, kMaxExtraSims);
         while (budget > 0 && !g_jobs.empty()) {
             auto& job = g_jobs.front();
             stepJob(pl, job);
@@ -776,6 +868,19 @@ class $modify(NXRFrameWindowGameLayer, GJBaseGameLayer) {
             form.addConfigSlider("Check Length (ticks)", kHorizonKey, 40.f, 480.f, 80.f, 5.f, NXR::SliderScale::Linear, {{"60", 60.f}, {"80", 80.f}, {"200", 200.f}, {"300", 300.f}}, nullptr, true);
             form.addConfigSlider("Max Window (ticks)", kMaxKey, 4.f, 64.f, 32.f, 1.f, NXR::SliderScale::Linear, {{"16", 16.f}, {"32", 32.f}, {"64", 64.f}}, nullptr, true);
             form.addSeparator();
+            form.addSeparator();
+            form.addConfigToggle("Show L* (precision)", kLStarKey, false, [](bool) { g_lstarDirty = true; g_lstarRedraw = true; });
+            form.addConfigToggle("L* Base", kMetricKeys[0], true, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* Nerve", kMetricKeys[1], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* Fatigue", kMetricKeys[2], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* CPS", kMetricKeys[3], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* Nerve+Fatigue", kMetricKeys[4], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* Nerve+CPS", kMetricKeys[5], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* Fatigue+CPS", kMetricKeys[6], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigToggle("L* All", kMetricKeys[7], false, [](bool) { g_lstarRedraw = true; });
+            form.addConfigSlider("L* Respawn Time", kRespawnKey, 0.f, 10.f, 0.f, 0.1f, NXR::SliderScale::Linear, {{"0 s", 0.f}, {"1 s", 1.f}, {"2 s", 2.f}}, [](float) { g_lstarDirty = true; }, false, " s");
+            form.addConfigSlider("L* Target Time", kTargetKey, 1.f, 168.f, 24.f, 1.f, NXR::SliderScale::Linear, {{"1 h", 1.f}, {"24 h", 24.f}, {"72 h", 72.f}, {"168 h", 168.f}}, [](float) { g_lstarDirty = true; }, true, " h");
+            form.addSeparator();
             form.addConfigSlider("Marker Size", kMarkSizeKey, 40.f, 250.f, 100.f, 5.f, NXR::SliderScale::Linear, {{"70%", 70.f}, {"100%", 100.f}, {"150%", 150.f}}, nullptr, true, "%");
             form.addConfigSlider("Counter Size", kScaleKey, 40.f, 250.f, 100.f, 5.f, NXR::SliderScale::Linear, {{"70%", 70.f}, {"100%", 100.f}, {"150%", 150.f}}, [](float) { dropHud(); }, true, "%");
             form.addConfigSlider("Counter Height", kPosYKey, 10.f, 99.f, 95.f, 1.f, NXR::SliderScale::Linear, {}, [](float) { dropHud(); }, true, "%");
@@ -900,6 +1005,9 @@ class $modify(NXRFrameWindowPlayLayer, PlayLayer) {
             g_layer = this;
             g_levelId = levelId;
             dropHud();
+            dropLStar();
+            g_lstarValid = false;
+            g_lstarDirty = true;
             dropFake();
             resetAll();
             recount(keyNow(this));
@@ -916,6 +1024,7 @@ class $modify(NXRFrameWindowPlayLayer, PlayLayer) {
 
         updateMarkers(this);
         runJobs(this);
+        updateLStar(this, dt);
 
         if (!showCounter()) {
             if (g_hud) g_hud->setVisible(false);
@@ -938,6 +1047,7 @@ class $modify(NXRFrameWindowPlayLayer, PlayLayer) {
     void onQuit() {
         g_layer = nullptr;
         dropHud();
+        dropLStar();
         dropFake();
         resetAll();
         PlayLayer::onQuit();

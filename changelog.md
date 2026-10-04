@@ -1,3 +1,10 @@
+# v1.4.21
+
+- **Fix:** Frame Window Counter now scans the window one tick at a time and stops at the first tick that fails, so a gap in the survivable ticks can no longer inflate the window (the old binary search could jump over it).
+- **Fix:** Frame Window Counter kept only 512 ticks of history, so with a long Check Length some clicks silently got no window. History is now 1024 ticks.
+- **Change:** when many clicks are queued, Frame Window Counter measures more windows per frame so results arrive sooner.
+- **New:** L* precision (NaNDL model: Base, Nerve, Fatigue, CPS and their combinations) is calculated from the measured windows and shown bottom left. Turn it on with Show L*, choose the metrics, and set respawn and target time in the hack settings. The model is ported from Frame Window Counter by hyper-5 (MIT).
+
 # v1.4.20
 
 - **Change:** the bot saves a full player snapshot (super frame) every 4 frames instead of every 30, so playback can restore the exact state much more often. Replay files become larger. Old replays still play.
