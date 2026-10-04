@@ -330,10 +330,10 @@ namespace NXR::Kit {
         if (std::fabs(y - m_shownY) > 0.01f || m_down != m_shownDown) redraw();
     }
 
-    bool ScrollGrip::onTop() const {
+    bool ScrollGrip::onTop() {
         auto* scene = CCDirector::sharedDirector()->getRunningScene();
         if (!scene) return false;
-        const CCNode* root = this;
+        CCNode* root = this;
         while (root->getParent() && root->getParent() != scene) root = root->getParent();
         if (root->getParent() != scene) return false;
         auto* kids = scene->getChildren();
@@ -432,7 +432,7 @@ namespace NXR::Kit {
         m_barScroll = -1.f;
     }
 
-    bool PanelList::inGutter(const CCPoint& world) const {
+    bool PanelList::inGutter(const CCPoint& world) {
         if (m_gutter <= 0.f || maxScroll() <= 0.5f) return false;
         const CCPoint local = this->convertToNodeSpace(world);
         return local.x >= m_viewW - m_gutter - m_gutter * 0.25f;

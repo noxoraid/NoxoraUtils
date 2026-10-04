@@ -32,7 +32,7 @@ namespace NXR::Kit {
         float thumbHeight() const;
         void redraw();
         void apply(const CCPoint& world, bool begin);
-        bool onTop() const;
+        bool onTop();
 
         geode::ScrollLayer* m_target = nullptr;
         CCDrawNode* m_draw = nullptr;
@@ -240,7 +240,7 @@ namespace NXR::Kit {
         void applyScrollPosition();
         void redrawBar();
         void dragBar(const CCPoint& world, bool begin);
-        bool inGutter(const CCPoint& world) const;
+        bool inGutter(const CCPoint& world);
         float thumbHeight() const;
 
         std::vector<Entry> m_entries;
