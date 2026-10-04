@@ -38,7 +38,7 @@ namespace {
     // A full player snapshot is stored this often (in ticks). Playback restores the nearest
     // earlier snapshot when it detects drift, so a smaller value means finer repair but a
     // bigger file.
-    constexpr uint32_t kSuperInterval = 30;
+    constexpr uint32_t kSuperInterval = 4;
 
     // True only while we are inside processQueuedButtons; lets handleButton tell our own
     // replayed inputs apart from real touches.
@@ -310,7 +310,7 @@ namespace {
     // Positions are in game units, rotation in degrees. Small values keep the replay exact;
     // large values would let tiny float differences accumulate into a death.
     constexpr float kDriftEps = 0.002f;
-    constexpr float kVelEps = 0.002f;
+    constexpr float kVelEps = 0.001f;
     constexpr float kRotEps = 1.f;
 
     bool drifted(PlayerObject* p, const NXR::Capture::PlayerState& s, bool full) {
@@ -372,14 +372,9 @@ namespace {
     // A death during playback while a recorded row exists for this frame means the replay
     // drifted (the original run survived here). Returns true so the caller can swallow the
     // death and let applyPlayback repair the state on the next tick.
-    bool globalNoclipEnabled() {
-        return NXRConfig::get().get<bool>("nxr.player.noclip", false);
-    }
-
     bool isDesyncDeath(PlayLayer* pl, GameObject* object) {
         auto& st = State::get();
         if (st.mode != Mode::Playing || !rescueEnabled()) return false;
-        if (st.current.noclip && !globalNoclipEnabled()) return false;
         if (!pl || pl->m_levelEndAnimationStarted) return false;
         if (object && object == pl->m_anticheatSpike) return false;
         if (st.current.frames.empty() || st.frame == 0) return false;
@@ -832,7 +827,7 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
 class $modify(NXRBotPlayLayer, PlayLayer) {
     void destroyPlayer(PlayerObject* player, GameObject* object) {
         if (State::get().mode == Mode::Playing && !m_levelEndAnimationStarted) {
-            if (!playbackDeathEnabled() && globalNoclipEnabled()) return;
+            if (!playbackDeathEnabled()) return;
             if (isDesyncDeath(this, object)) {
                 noteRescue();
                 return;

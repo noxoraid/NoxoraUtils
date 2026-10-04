@@ -158,7 +158,6 @@ bool NXRReplayInfoPopup::init(const std::string& name, const NXR::Bot::Macro& ma
         {"Level ID", macro.levelId > 0 ? std::to_string(macro.levelId) : "N/A"},
         {"Mode", platformer ? "Platformer" : "Normal"},
         {"Version", macro.version.empty() ? "N/A" : macro.version},
-        {"Recorded With Noclip", macro.noclip ? "Yes" : "No"},
         {"Total Jumps", std::to_string(jumps)},
         {"Move Inputs (L / R)", platformer ? std::to_string(moves) : std::string("N/A")},
         {"Total Actions", std::to_string(macro.events.size())},

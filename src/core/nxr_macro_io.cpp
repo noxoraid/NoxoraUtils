@@ -134,7 +134,7 @@ bool NXR::Bot::saveMacro(const Macro& macro, const std::filesystem::path& path) 
     std::ofstream out(tempPath, std::ios::binary | std::ios::trunc);
     if (!out.is_open()) return false;
 
-    out.write(kMagicV10, 4);
+    out.write(kMagicV9, 4);
     putText(out, macro.version);
     putText(out, macro.levelName);
     put(out, macro.levelId);
@@ -173,8 +173,6 @@ bool NXR::Bot::saveMacro(const Macro& macro, const std::filesystem::path& path) 
     if (hasStats) {
         for (uint32_t value : stats.toArray()) put(out, value);
     }
-
-    put(out, static_cast<uint8_t>(macro.noclip ? 1 : 0));
 
     out.flush();
     if (!out.good()) {
@@ -279,7 +277,7 @@ bool NXR::Bot::loadMacro(Macro& macro, const std::filesystem::path& path) {
     if (v10) {
         uint8_t flags = 0;
         if (!get(in, flags)) return false;
-        r.noclip = (flags & 1) != 0;
+        (void)flags;
     }
 
     char trailing = 0;

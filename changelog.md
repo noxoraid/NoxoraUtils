@@ -1,3 +1,13 @@
+# v1.4.20
+
+- **Change:** the bot saves a full player snapshot (super frame) every 4 frames instead of every 30, so playback can restore the exact state much more often. Replay files become larger. Old replays still play.
+- **Change:** playback drift check on vertical speed is tighter (0.001).
+
+# v1.4.19
+
+- **Fix:** Bot record and playback are back to the original behavior. Noclip is ignored while the bot records or plays (it only works with the bot off), so deaths during playback are real again and Desync Rescue works on every replay. Playback Death hides deaths again whenever it is off. This undoes the Noclip changes of v1.4.17.
+- **Change:** replays are saved in the previous file format again. Replays saved by v1.4.17 and v1.4.18 can still be opened. The "Recorded With Noclip" line in replay info is removed.
+
 # v1.4.18
 
 - **Change:** Frame Window Counter now follows the Frame Window Counter mod's logic, but works on your own NXR macro and runs instead of an imported macro. Every click gets a frame window: how many physics frames earlier or later the same click still survives with the game's own physics. The marker (circle with the window size and the lowest FPS that can hit it) now appears on the player at the exact moment of the click as "..." and fills in as soon as the window is measured, instead of showing up late behind the player. Windows are found with a binary search (about 10 checks instead of up to 60), 8 checks per frame, and a shorter default check length of 80 ticks, so results arrive within a few frames in playback. The click sound pitch matches the label, and the label list in the top left counts clicks by needed FPS (20 white, 30, 45, 60, 90, 120, 240, 240+ red) with the count animation. While a macro plays, the window is measured from the macro inputs. Results are kept per level, so the next playback shows markers and counts instantly. Show Counter and Show Markers can be hidden separately, with sound volume, check length, max window, marker size, counter size and height.
