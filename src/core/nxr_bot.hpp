@@ -82,6 +82,7 @@ namespace NXR::Bot {
         float tps = 240.f;
         uint64_t totalFrames = 0;
         uint32_t layout = 0;
+        bool noclip = false;
         bool hasStats = false;
         NXR::Stats::LevelStats stats;
         std::vector<InputEvent> events;
@@ -97,6 +98,7 @@ namespace NXR::Bot {
             tps = 240.f;
             totalFrames = 0;
             layout = 0;
+            noclip = false;
             hasStats = false;
             stats = {};
             events.clear();

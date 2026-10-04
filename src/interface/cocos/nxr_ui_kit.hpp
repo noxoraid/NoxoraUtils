@@ -9,13 +9,27 @@
 #include <vector>
 #include "../../core/nxr_form.hpp"
 #include "../../core/nxr_hacks.hpp"
+#include "../../core/nxr_config.hpp"
+#include "../../core/nxr_utils.hpp"
+#include "../../core/nxr_ui_mode.hpp"
 
 namespace NXR::Kit {
     using namespace geode::prelude;
 
     namespace Pal {
-        inline ccColor3B accent() { return ccc3(34, 211, 238); }
-        inline ccColor3B onAccent() { return ccc3(6, 26, 34); }
+        inline ccColor3B hexOr(const char* key, const char* fallback) {
+            return NXR::Utils::hexToColor(NXRConfig::get().get<std::string>(key, fallback));
+        }
+        inline ccColor3B accent() { return hexOr(NXR::Ui::kAccentColorKey, "22D3EE"); }
+        inline ccColor3B accent2() { return hexOr(NXR::Ui::kGradientColorKey, "7C3AED"); }
+        inline ccColor3B panel() { return hexOr(NXR::Ui::kPanelColorKey, "0D121B"); }
+        inline bool gradientOn() { return NXRConfig::get().get<bool>(NXR::Ui::kGradientOnKey, false); }
+        inline bool gradientHorizontal() { return NXRConfig::get().get<int>(NXR::Ui::kGradientDirKey, 0) == 1; }
+        inline ccColor3B onAccent() {
+            const ccColor3B c = accent();
+            const float lum = 0.299f * c.r + 0.587f * c.g + 0.114f * c.b;
+            return lum > 150.f ? ccc3(6, 26, 34) : ccc3(246, 249, 252);
+        }
         inline ccColor3B text() { return ccc3(232, 238, 246); }
         inline ccColor3B muted() { return ccc3(134, 148, 170); }
         inline ccColor3B danger() { return ccc3(255, 128, 128); }
@@ -54,6 +68,8 @@ namespace NXR::Kit {
         About,
         Check,
         Back,
+        Edit,
+        Info,
     };
 
     CCSprite* makeIcon(Icon icon, float targetSize, const ccColor3B& color);
@@ -61,6 +77,8 @@ namespace NXR::Kit {
 
     void drawRound(CCDrawNode* node, float x, float y, float w, float h, float radius, const ccColor4F& color);
     void drawCircle(CCDrawNode* node, float cx, float cy, float radius, const ccColor4F& color);
+    void drawGradient(CCDrawNode* node, float x, float y, float w, float h, float radius, const ccColor4F& from, const ccColor4F& to, bool horizontal);
+    void drawAccent(CCDrawNode* node, float x, float y, float w, float h, float radius, float alpha = 1.f);
 
     float lineHeightUnit();
     geode::Label* makeLabel(const std::string& text, float linePt, const ccColor3B& color, const CCPoint& anchor);
@@ -74,6 +92,7 @@ namespace NXR::Kit {
         std::string defaultHex;
         bool alpha = false;
         std::string rainbowKey;
+        std::function<void()> onChange;
     };
 
     struct SliderSpec {

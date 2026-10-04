@@ -25,6 +25,7 @@ namespace {
     constexpr const char* kCbfKey = "nxr.bot.cbf_bypass";
     constexpr const char* kPlaybackDeathKey = "nxr.bot.playback_death";
     constexpr const char* kDesyncRescueKey = "nxr.bot.desync_rescue";
+    constexpr const char* kValidateLevelKey = "nxr.bot.validate_level";
     constexpr const char* kIndLineKey = "nxr.bot.click_indicator::line_color";
     constexpr const char* kIndBodyKey = "nxr.bot.click_indicator::body_color";
     constexpr const char* kIndBodyOpacityKey = "nxr.bot.click_indicator::body_opacity";
@@ -106,6 +107,10 @@ namespace {
         }
 
         if (auto* pl = PlayLayer::get(); pl && pl->m_level && macro.levelId != 0 && macro.levelId != static_cast<int32_t>(pl->m_level->m_levelID.value())) {
+            if (NXRConfig::get().get<bool>(kValidateLevelKey, true)) {
+                notify(fmt::format("Replay is for level '{}' (ID {}), this level is ID {}. Playback cancelled", macro.levelName, macro.levelId, static_cast<int32_t>(pl->m_level->m_levelID.value())), geode::NotificationIcon::Error);
+                return false;
+            }
             notify(fmt::format("Replay is for level '{}' (ID {}), not this level", macro.levelName, macro.levelId), geode::NotificationIcon::Warning);
         }
 
@@ -680,6 +685,7 @@ $execute {
         popup->addConfigToggle("Practice Fixes", kPracticeFixKey, true);
         popup->addConfigToggle("Fix Random", kFixRandomKey, true);
         popup->addConfigToggle("CBF Bypass", kCbfKey, true);
+        popup->addConfigToggle("Validate Level ID", kValidateLevelKey, true);
         popup->addConfigToggle("Playback Death", kPlaybackDeathKey, true);
         popup->addConfigToggle("Desync Rescue", kDesyncRescueKey, true);
         popup->addConfigToggle("Wave Trail Fix", "nxr.bot.wave_trail_fix", true);

@@ -47,11 +47,5 @@ void NXR::Ui::showChoice(const std::string& title, const std::vector<std::string
     if (choices.size() < 2) return;
     std::string body;
     for (auto& note : notes) body += note + "\n";
-    auto first = choices[0].second;
-    auto second = choices[1].second;
-    auto* alert = geode::createQuickPopup(title.c_str(), body, choices[0].first.c_str(), choices[1].first.c_str(), [first, second](auto*, bool secondPicked) {
-        if (secondPicked) second();
-        else first();
-    });
-    if (alert && NXR::Imgui::isOpen()) NXR::Imgui::holdFor(alert);
+    showPopup(NXRChoicePopup::create(title, body, choices), title);
 }

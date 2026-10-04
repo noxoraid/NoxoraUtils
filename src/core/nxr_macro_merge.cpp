@@ -70,6 +70,7 @@ bool NXR::Bot::mergeMacros(const Macro& a, const Macro& b, MergeMode mode, Macro
     result.fps = a.fps;
     result.tps = a.tps;
     result.layout = a.layout;
+    result.noclip = a.noclip || b.noclip;
 
     if (mode == MergeMode::Players) {
         for (const auto& ev : a.events) {

@@ -75,12 +75,16 @@ class $modify(NXRNoclipPlayLayer, PlayLayer) {
 
         auto& config = NXRConfig::get();
 
-        bool noclipEnabled = config.get<bool>("nxr.player.noclip", false) && NXR::Bot::State::get().mode == NXR::Bot::Mode::Off;
+        bool noclipEnabled = config.get<bool>("nxr.player.noclip", false);
 
         bool shouldDestroy = noclipEnabled ? ((player == m_player1 && !config.get<bool>("nxr.player.noclip::p1", true)) ||
             (player == m_player2 && !config.get<bool>("nxr.player.noclip::p2", true))) : true;
 
-        if (noclipEnabled && !shouldDestroy) {
+        if (noclipEnabled && !shouldDestroy && NXR::Bot::State::get().mode == NXR::Bot::Mode::Recording) {
+            NXR::Bot::State::get().current.noclip = true;
+        }
+
+        if (noclipEnabled && !shouldDestroy && NXR::Bot::State::get().mode == NXR::Bot::Mode::Off) {
             auto& accuracy = NXRNoclipAccuracy::get();
 
             if (config.get<bool>("nxr.player.noclip::limit_deaths", false)) {

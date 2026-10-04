@@ -372,9 +372,36 @@ namespace {
     // A death during playback while a recorded row exists for this frame means the replay
     // drifted (the original run survived here). Returns true so the caller can swallow the
     // death and let applyPlayback repair the state on the next tick.
+    bool validateLevelEnabled() {
+        return NXRConfig::get().get<bool>("nxr.bot.validate_level", true);
+    }
+
+    bool globalNoclipEnabled() {
+        return NXRConfig::get().get<bool>("nxr.player.noclip", false);
+    }
+
+    bool levelMismatch(PlayLayer* pl) {
+        auto& st = State::get();
+        if (!pl || !pl->m_level || st.mode != Mode::Playing) return false;
+        if (st.current.levelId == 0) return false;
+        return st.current.levelId != static_cast<int32_t>(pl->m_level->m_levelID.value());
+    }
+
+    void abortForLevelMismatch(PlayLayer* pl) {
+        auto& st = State::get();
+        const std::string text = fmt::format("Replay stopped: it was recorded on '{}' (ID {}), this level is ID {}",
+            st.current.levelName.empty() ? std::string("unknown") : st.current.levelName,
+            st.current.levelId, static_cast<int32_t>(pl->m_level->m_levelID.value()));
+        st.stop();
+        geode::queueInMainThread([text] {
+            geode::Notification::create(text, geode::NotificationIcon::Error)->show();
+        });
+    }
+
     bool isDesyncDeath(PlayLayer* pl, GameObject* object) {
         auto& st = State::get();
         if (st.mode != Mode::Playing || !rescueEnabled()) return false;
+        if (st.current.noclip && !globalNoclipEnabled()) return false;
         if (!pl || pl->m_levelEndAnimationStarted) return false;
         if (object && object == pl->m_anticheatSpike) return false;
         if (st.current.frames.empty() || st.frame == 0) return false;
@@ -811,6 +838,10 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
                     recordRow(this, st.frame, false);
                 }
             } else if (st.mode == Mode::Playing) {
+                if (validateLevelEnabled() && levelMismatch(pl)) {
+                    abortForLevelMismatch(pl);
+                    return;
+                }
                 applyPlayback(this, st.frame, st.lastRescueFrame == st.frame && st.rescues > 0);
                 indicatorUpdate();
             }
@@ -827,7 +858,7 @@ class $modify(NXRBotGameLayer, GJBaseGameLayer) {
 class $modify(NXRBotPlayLayer, PlayLayer) {
     void destroyPlayer(PlayerObject* player, GameObject* object) {
         if (State::get().mode == Mode::Playing && !m_levelEndAnimationStarted) {
-            if (!playbackDeathEnabled()) return;
+            if (!playbackDeathEnabled() && globalNoclipEnabled()) return;
             if (isDesyncDeath(this, object)) {
                 noteRescue();
                 return;

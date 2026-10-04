@@ -199,7 +199,7 @@ namespace NXR::Kit {
                 const float segW = (m_x1 - m_x0) / count;
                 drawRound(m_seg, m_x0, m_y0, m_x1 - m_x0, m_bandH, m_bandH * 0.5f, fillColor(31, 39, 55));
                 if (m_current >= 0 && m_current < static_cast<int>(m_options.size())) {
-                    drawRound(m_seg, m_x0 + segW * static_cast<float>(m_current) + dp(3.f), m_y0 + dp(3.f), segW - dp(6.f), m_bandH - dp(6.f), (m_bandH - dp(6.f)) * 0.5f, fromColor(Pal::accent()));
+                    drawAccent(m_seg, m_x0 + segW * static_cast<float>(m_current) + dp(3.f), m_y0 + dp(3.f), segW - dp(6.f), m_bandH - dp(6.f), (m_bandH - dp(6.f)) * 0.5f);
                 }
                 for (size_t i = 0; i < m_segLabels.size(); i++) {
                     m_segLabels[i]->setColor(static_cast<int>(i) == m_current ? Pal::onAccent() : Pal::text());
@@ -371,13 +371,13 @@ namespace NXR::Kit {
                 const float tx = m_x0 + (m_x1 - m_x0) * t;
                 const float th = dp(6.f);
                 drawRound(m_track, m_x0, cy - th * 0.5f, m_x1 - m_x0, th, th * 0.5f, fillColor(44, 56, 78));
-                if (tx > m_x0 + 0.5f) drawRound(m_track, m_x0, cy - th * 0.5f, tx - m_x0, th, th * 0.5f, fromColor(Pal::accent()));
+                if (tx > m_x0 + 0.5f) drawAccent(m_track, m_x0, cy - th * 0.5f, tx - m_x0, th, th * 0.5f);
                 drawCircle(m_track, tx, cy, dp(12.f), fillColor(255, 255, 255));
                 drawCircle(m_track, tx, cy, dp(7.f), fromColor(Pal::accent()));
                 if (m_number) {
                     m_number->setString((formatNumber(m_value, m_spec.integer, m_spec.step) + m_spec.suffix).c_str());
                     m_number->setScale(dp(25.f) / lineHeightUnit());
-                    fitLabel(m_number, m_width * 0.5f);
+                    fitLabel(m_number, dp(78.f));
                 }
                 if (!m_spec.presets.empty()) m_strip.setSelected(presetIndex());
             }
@@ -427,8 +427,19 @@ namespace NXR::Kit {
                 fitLabel(title, width * 0.42f);
                 view->addChild(title);
 
-                m_number = makeLabel("", dp(25.f), Pal::text(), CCPoint(1.f, 0.5f));
-                m_number->setPosition(CCPoint(width - dp(22.f), top - dp(26.f)));
+                const float fieldW = dp(112.f);
+                const float fieldH = dp(38.f);
+                const float fieldX = width - dp(18.f) - fieldW;
+                const float fieldY = top - dp(26.f) - fieldH * 0.5f;
+                drawRound(m_bg, fieldX - 1.5f, fieldY - 1.5f, fieldW + 3.f, fieldH + 3.f, dp(11.f) + 1.5f, fromColor(Pal::accent(), 0.55f));
+                drawRound(m_bg, fieldX, fieldY, fieldW, fieldH, dp(11.f), fillColor(11, 16, 26));
+
+                auto* pencil = makeIcon(Icon::Edit, dp(15.f), Pal::muted());
+                pencil->setPosition(CCPoint(fieldX + dp(15.f), top - dp(26.f)));
+                view->addChild(pencil, 3);
+
+                m_number = makeLabel("", dp(25.f), Pal::text(), CCPoint(0.5f, 0.5f));
+                m_number->setPosition(CCPoint(fieldX + fieldW * 0.5f + dp(8.f), top - dp(26.f)));
                 view->addChild(m_number, 3);
 
                 if (!m_spec.presets.empty()) {
@@ -460,7 +471,7 @@ namespace NXR::Kit {
                     fromX(p.x);
                     return Touch::Drag;
                 }
-                if (p.y > m_base + dp(44.f) && p.x > m_width * 0.42f) {
+                if (p.y > m_base + dp(44.f) && p.x > m_width - dp(140.f)) {
                     m_mode = 3;
                     return Touch::Tap;
                 }
@@ -561,7 +572,7 @@ namespace NXR::Kit {
             void touchEnded(const CCPoint&, bool tap) override {
                 m_pressed = false;
                 redraw();
-                if (tap) host()->openColorPicker(m_spec, nullptr);
+                if (tap) host()->openColorPicker(m_spec, m_spec.onChange);
             }
 
             void touchCancelled() override {

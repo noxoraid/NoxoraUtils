@@ -1,3 +1,14 @@
+# v1.4.17
+
+- **Fix:** a replay recorded on one level no longer plays on another. Playback is refused when the Level ID differs (new "Validate Level ID" option in the bot settings, on by default) and a running replay stops with a message if the level changes.
+- **Fix:** replays recorded with Noclip no longer keep passing through obstacles after Noclip is turned off. Desync Rescue is skipped for those replays, so deaths are real unless Noclip is on right now.
+- **Change:** Noclip now follows the current global setting in every bot mode, including recording and playback. Replays remember if they were recorded with Noclip (shown in the replay info). Playback Death only hides deaths while Noclip is on. Replays saved before this version have no Noclip flag.
+- **New:** UI Size goes down to 0.5x (up to 1.5x), with more presets and a value field with a pencil icon. Tap the field to type an exact number.
+- **New:** Colors section in Settings: accent color, panel color, gradient on/off, gradient color, gradient direction and Reset Colors. The gradient is used by the panel background, selected buttons, chips and slider fills.
+- **Change:** all pop-ups (Select Replay, Replay Browser, replay info, file name, search, confirmations, Gamemode Swapper) use a new dark rounded style that follows the panel colors, with the same buttons and rows as the panel.
+- **Fix:** the N logo button no longer sits on top of the open panel. It hides while the panel is open and comes back when it closes.
+- **Change:** res cleanup. Removed unused images (closeBtn, infoIcon, settingsBtn, tableArrow, tableClose), centered the UI icons and the NXR logo, and added NXR_uiEdit and NXR_uiInfo.
+
 # v1.4.16
 
 - **New:** the mobile panel is rebuilt as one landscape layout with a tab rail, search bar, status chips, favorites (star on every hack), and side sheets for hack settings and info instead of popups.

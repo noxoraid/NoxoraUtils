@@ -21,6 +21,13 @@ namespace NXR::Ui {
     inline constexpr const char* kFavoritesKey = "nxr.ui.favorites";
     inline constexpr const char* kRecentColorsKey = "nxr.ui.recent_colors";
     inline constexpr const char* kTabKey = "nxr.ui.last_tab";
+    inline constexpr const char* kAccentColorKey = "nxr.ui.accent_color";
+    inline constexpr const char* kPanelColorKey = "nxr.ui.panel_color";
+    inline constexpr const char* kGradientOnKey = "nxr.ui.gradient_on";
+    inline constexpr const char* kGradientColorKey = "nxr.ui.gradient_color";
+    inline constexpr const char* kGradientDirKey = "nxr.ui.gradient_dir";
+    inline constexpr float kPanelScaleMin = 0.5f;
+    inline constexpr float kPanelScaleMax = 1.5f;
     inline constexpr const char* kLogoScaleKey = "nxr.ui_icon.scale";
     inline constexpr const char* kLogoHideGameKey = "nxr.ui_icon.hide_on_game";
     inline constexpr const char* kLogoHideEditorKey = "nxr.ui_icon.hide_on_editor";
@@ -61,7 +68,7 @@ namespace NXR::Ui {
     }
 
     inline float panelScale() {
-        return std::clamp(NXRConfig::get().get<float>(kPanelScaleKey, 1.f), 0.9f, 1.2f);
+        return std::clamp(NXRConfig::get().get<float>(kPanelScaleKey, 1.f), kPanelScaleMin, kPanelScaleMax);
     }
 
     inline float panelOpacity() {

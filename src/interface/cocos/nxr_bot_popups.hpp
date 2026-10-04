@@ -2,7 +2,9 @@
 #include <Geode/Geode.hpp>
 #include "../../core/nxr_bot.hpp"
 #include <filesystem>
+#include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 #include "../../core/nxr_macro_import.hpp"
 
@@ -62,4 +64,12 @@ protected:
 
 public:
     static NXRReplayBrowserPopup* create(const std::string& title, geode::Function<void(const std::filesystem::path&)> onPick);
+};
+
+class NXRChoicePopup : public geode::Popup {
+protected:
+    bool init(const std::string& title, const std::vector<std::string>& lines, std::vector<std::pair<std::string, std::function<void()>>> choices);
+
+public:
+    static NXRChoicePopup* create(const std::string& title, const std::string& body, std::vector<std::pair<std::string, std::function<void()>>> choices);
 };

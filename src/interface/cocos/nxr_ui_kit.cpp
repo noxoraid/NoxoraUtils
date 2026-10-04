@@ -29,6 +29,8 @@ namespace NXR::Kit {
             case Icon::About: sprite = CCSprite::create("NXR_uiAbout.png"_spr); break;
             case Icon::Check: sprite = CCSprite::create("NXR_uiCheck.png"_spr); break;
             case Icon::Back: sprite = CCSprite::create("NXR_uiBack.png"_spr); break;
+            case Icon::Edit: sprite = CCSprite::create("NXR_uiEdit.png"_spr); break;
+            case Icon::Info: sprite = CCSprite::create("NXR_uiInfo.png"_spr); break;
         }
         if (!sprite) sprite = CCSprite::create();
         const float base = std::max(sprite->getContentWidth(), sprite->getContentHeight());
@@ -45,6 +47,62 @@ namespace NXR::Kit {
         if (name == "Utils") return Icon::Utils;
         if (name == "Creator") return Icon::Creator;
         return Icon::Utils;
+    }
+
+    namespace {
+        float cornerInset(float d, float radius) {
+            if (d >= radius) return 0.f;
+            const float k = radius - d;
+            return radius - std::sqrt(std::max(0.f, radius * radius - k * k));
+        }
+    }
+
+    void drawGradient(CCDrawNode* node, float x, float y, float w, float h, float radius, const ccColor4F& from, const ccColor4F& to, bool horizontal) {
+        if (!node || w <= 0.f || h <= 0.f) return;
+        radius = std::clamp(radius, 0.f, std::min(w, h) * 0.5f);
+        const float span = horizontal ? w : h;
+        const int count = std::clamp(static_cast<int>(span / 3.f), 8, 56);
+        for (int i = 0; i < count; i++) {
+            const float t0 = static_cast<float>(i) / static_cast<float>(count);
+            const float t1 = static_cast<float>(i + 1) / static_cast<float>(count);
+            const float tm = (t0 + t1) * 0.5f;
+            const ccColor4F color = ccc4f(
+                from.r + (to.r - from.r) * tm,
+                from.g + (to.g - from.g) * tm,
+                from.b + (to.b - from.b) * tm,
+                from.a + (to.a - from.a) * tm);
+            CCPoint pts[4];
+            if (horizontal) {
+                const float x0 = x + w * t0;
+                const float x1 = x + w * t1 + (i + 1 < count ? 0.6f : 0.f);
+                const float in0 = std::max(cornerInset(x0 - x, radius), cornerInset(x + w - x0, radius));
+                const float in1 = std::max(cornerInset(x1 - x, radius), cornerInset(x + w - x1, radius));
+                const float inset = std::max(in0, in1);
+                pts[0] = CCPoint(x0, y + inset);
+                pts[1] = CCPoint(x1, y + inset);
+                pts[2] = CCPoint(x1, y + h - inset);
+                pts[3] = CCPoint(x0, y + h - inset);
+            } else {
+                const float yTop = y + h - h * t0;
+                const float yBot = y + h - h * t1 - (i + 1 < count ? 0.6f : 0.f);
+                const float in0 = std::max(cornerInset(yTop - y, radius), cornerInset(y + h - yTop, radius));
+                const float in1 = std::max(cornerInset(yBot - y, radius), cornerInset(y + h - yBot, radius));
+                const float inset = std::max(in0, in1);
+                pts[0] = CCPoint(x + inset, yBot);
+                pts[1] = CCPoint(x + w - inset, yBot);
+                pts[2] = CCPoint(x + w - inset, yTop);
+                pts[3] = CCPoint(x + inset, yTop);
+            }
+            node->drawPolygon(pts, 4, color, 0.f, ccc4f(0.f, 0.f, 0.f, 0.f));
+        }
+    }
+
+    void drawAccent(CCDrawNode* node, float x, float y, float w, float h, float radius, float alpha) {
+        if (Pal::gradientOn()) {
+            drawGradient(node, x, y, w, h, radius, fromColor(Pal::accent(), alpha), fromColor(Pal::accent2(), alpha), Pal::gradientHorizontal());
+        } else {
+            drawRound(node, x, y, w, h, radius, fromColor(Pal::accent(), alpha));
+        }
     }
 
     void drawRound(CCDrawNode* node, float x, float y, float w, float h, float radius, const ccColor4F& color) {
@@ -507,7 +565,8 @@ namespace NXR::Kit {
         auto& chip = m_chips[index];
         const bool on = m_highlight && static_cast<int>(index) == m_selected;
         chip.bg->clear();
-        drawRound(chip.bg, 0.f, 0.f, chip.w, m_h, m_h * 0.5f, on ? fromColor(Pal::accent()) : fillColor(31, 39, 55));
+        if (on) drawAccent(chip.bg, 0.f, 0.f, chip.w, m_h, m_h * 0.5f);
+        else drawRound(chip.bg, 0.f, 0.f, chip.w, m_h, m_h * 0.5f, fillColor(31, 39, 55));
         chip.label->setColor(on ? Pal::onAccent() : Pal::text());
     }
 

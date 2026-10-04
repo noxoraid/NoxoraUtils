@@ -2,6 +2,7 @@
 #include "nxr_menu.hpp"
 #include "nxr_overlay_button.hpp"
 #include "../../core/nxr_theme.hpp"
+#include "nxr_modal.hpp"
 #include "../../core/nxr_config.hpp"
 #include "../../core/nxr_gui.hpp"
 #include "../../core/nxr_keybinds.hpp"
@@ -149,24 +150,16 @@ namespace {
 
     protected:
         bool init(const std::string& initial) {
-            if (!geode::Popup::init(300.f, 120.f, NXR::Theme::square())) return false;
+            if (!geode::Popup::init(320.f, 150.f, NXR::Theme::square())) return false;
             auto size = m_mainLayer->getContentSize();
+            NXR::Modal::skin({m_mainLayer, m_bgSprite, m_closeBtn, m_buttonMenu}, "Search hacks", size.width, size.height);
 
-            auto titleLabel = geode::Label::create("Search hacks", "GoogleSans.fnt"_spr);
-            titleLabel->setPosition({size.width / 2.f, size.height - 20.f});
-            titleLabel->setScale(0.6f);
-            m_mainLayer->addChild(titleLabel);
-
-            auto closeSprite = cocos2d::CCSprite::create("NXR_closeBtn.png"_spr);
-            closeSprite->setScale(0.75f);
-            m_closeBtn->setSprite(closeSprite);
-
-            auto input = geode::TextInput::create(220.f, "Type a hack name", "GoogleSans.fnt"_spr);
+            auto input = geode::TextInput::create(260.f, "Type a hack name", "GoogleSans.fnt"_spr);
             if (auto* bg = input->getChildByType<geode::NineSlice>(0)) {
-                bg->setColor({34, 33, 46});
+                bg->setColor({11, 16, 26});
                 bg->setOpacity(255);
             }
-            input->setPosition({size.width / 2.f, size.height / 2.f - 2.f});
+            input->setPosition({size.width / 2.f, size.height / 2.f + 6.f});
             input->setMaxCharCount(24);
             input->setCallback([](const std::string& text) {
                 NXRHacksLayer::applyQuery(text);
@@ -174,14 +167,13 @@ namespace {
             if (!initial.empty()) input->setString(initial);
             m_mainLayer->addChild(input);
 
-            auto clearSprite = ButtonSprite::create("Clear", 80, true, "GoogleSans.fnt"_spr, NXR::Theme::button(), 24.f, 0.6f);
-            auto clearButton = geode::cocos::CCMenuItemExt::createSpriteExtra(clearSprite, [input](CCMenuItemSpriteExtra*) {
+            auto clearButton = NXR::Modal::button("Clear", 130.f, 36.f, true, [input] {
                 input->setString("");
                 NXRHacksLayer::applyQuery("");
             });
             auto menu = NXRMenu::create();
             menu->setPosition({0.f, 0.f});
-            clearButton->setPosition({size.width / 2.f, 24.f});
+            clearButton->setPosition({size.width / 2.f, 30.f});
             menu->addChild(clearButton);
             m_mainLayer->addChild(menu);
             return true;
@@ -263,11 +255,18 @@ void NXRHacksLayer::registerWithTouchDispatcher() {
     CCDirector::sharedDirector()->getTouchDispatcher()->addTargetedDelegate(this, -350, true);
 }
 
+namespace {
+    bool g_logoWasVisible = true;
+}
+
 void NXRHacksLayer::show() {
     if (this->getParent()) return;
     auto* scene = CCDirector::sharedDirector()->getRunningScene();
     if (!scene) return;
     scene->addChild(this, 104);
+    auto* logo = NXROverlayButton::get();
+    g_logoWasVisible = logo->isVisible();
+    logo->setVisible(false);
 }
 
 void NXRHacksLayer::onClose(CCObject*) {
@@ -281,6 +280,7 @@ void NXRHacksLayer::onClose(CCObject*) {
 
     if (instance == this) instance = nullptr;
     this->removeFromParentAndCleanup(true);
+    if (g_logoWasVisible) NXROverlayButton::get()->setVisible(true);
 }
 
 void NXRHacksLayer::closeLater() {
@@ -326,9 +326,17 @@ void NXRHacksLayer::redrawBackground() {
     const float opacity = NXR::Ui::panelOpacity();
     const float radius = dp(18.f);
     const float rail = dp(72.f);
-    drawRound(m_bgDraw, 0.f, 0.f, m_pw, m_ph, radius, fillColor(13, 18, 27, opacity));
-    drawRound(m_bgDraw, 0.f, 0.f, rail, m_ph, radius, fillColor(8, 12, 20, opacity));
-    drawRound(m_bgDraw, rail - radius, 0.f, radius, m_ph, 0.f, fillColor(8, 12, 20, opacity));
+    const ccColor3B base = Pal::panel();
+    const ccColor3B railBase = ccc3(static_cast<GLubyte>(base.r * 0.62f), static_cast<GLubyte>(base.g * 0.62f), static_cast<GLubyte>(base.b * 0.62f));
+    if (Pal::gradientOn()) {
+        const ccColor3B end = Pal::accent2();
+        const ccColor4F endFill = mixColor(base, end, 0.38f, opacity);
+        drawGradient(m_bgDraw, 0.f, 0.f, m_pw, m_ph, radius, fromColor(base, opacity), endFill, Pal::gradientHorizontal());
+    } else {
+        drawRound(m_bgDraw, 0.f, 0.f, m_pw, m_ph, radius, fromColor(base, opacity));
+    }
+    drawRound(m_bgDraw, 0.f, 0.f, rail, m_ph, radius, fromColor(railBase, opacity * 0.92f));
+    drawRound(m_bgDraw, rail - radius, 0.f, radius, m_ph, 0.f, fromColor(railBase, opacity * 0.92f));
     drawRound(m_bgDraw, rail, dp(10.f), 1.f, m_ph - dp(20.f), 0.f, fillColor(32, 44, 64, opacity));
 }
 
@@ -635,11 +643,11 @@ void NXRHacksLayer::fillSettings(PageBuilder& b) {
     size.label = "UI Size";
     size.key = NXR::Ui::kPanelScaleKey;
     size.suffix = "x";
-    size.min = 0.9f;
-    size.max = 1.2f;
+    size.min = NXR::Ui::kPanelScaleMin;
+    size.max = NXR::Ui::kPanelScaleMax;
     size.def = 1.f;
-    size.step = 0.05f;
-    size.presets = {{"0.9x", 0.9f}, {"1x", 1.f}, {"1.1x", 1.1f}, {"1.2x", 1.2f}};
+    size.step = 0.01f;
+    size.presets = {{"0.5x", 0.5f}, {"0.6x", 0.6f}, {"0.75x", 0.75f}, {"0.9x", 0.9f}, {"1x", 1.f}, {"1.1x", 1.1f}, {"1.2x", 1.2f}, {"1.5x", 1.5f}};
     size.onCommit = [this](float) { this->rebuildUiLater(); };
     b.addControl(makeSlider(this, size));
 
@@ -748,6 +756,53 @@ void NXRHacksLayer::fillSettings(PageBuilder& b) {
             NXR::Keybinds::get().clearCustomBind(kOpenMenuBind);
         });
     b.addLink("All Keybinds", nullptr, [this] { this->openKeybinds(); });
+
+    b.addSection("Colors");
+    ColorSpec accentSpec;
+    accentSpec.label = "Accent Color";
+    accentSpec.key = NXR::Ui::kAccentColorKey;
+    accentSpec.defaultHex = "22D3EE";
+    accentSpec.onChange = [this] { this->rebuildUiLater(); };
+    b.addControl(makeColorRow(this, accentSpec));
+
+    ColorSpec panelSpec;
+    panelSpec.label = "Panel Color";
+    panelSpec.key = NXR::Ui::kPanelColorKey;
+    panelSpec.defaultHex = "0D121B";
+    panelSpec.onChange = [this] { this->rebuildUiLater(); };
+    b.addControl(makeColorRow(this, panelSpec));
+
+    b.addToggle("Gradient",
+        [] { return NXRConfig::get().get<bool>(NXR::Ui::kGradientOnKey, false); },
+        [this](bool value) {
+            NXRConfig::get().set<bool>(NXR::Ui::kGradientOnKey, value);
+            this->rebuildUiLater();
+        });
+
+    ColorSpec gradientSpec;
+    gradientSpec.label = "Gradient Color";
+    gradientSpec.key = NXR::Ui::kGradientColorKey;
+    gradientSpec.defaultHex = "7C3AED";
+    gradientSpec.onChange = [this] { this->rebuildUiLater(); };
+    b.addControl(makeColorRow(this, gradientSpec));
+
+    b.addControl(makeChoice(this, "Gradient Direction", {"Vertical", "Horizontal"},
+        [] { return NXRConfig::get().get<int>(NXR::Ui::kGradientDirKey, 0); },
+        [this](int index) {
+            NXRConfig::get().set<int>(NXR::Ui::kGradientDirKey, index);
+            this->rebuildUiLater();
+            return index;
+        }));
+
+    b.addButtons({{"Reset Colors", [this] {
+        auto& config = NXRConfig::get();
+        config.set<std::string>(NXR::Ui::kAccentColorKey, "22D3EE");
+        config.set<std::string>(NXR::Ui::kPanelColorKey, "0D121B");
+        config.set<std::string>(NXR::Ui::kGradientColorKey, "7C3AED");
+        config.set<bool>(NXR::Ui::kGradientOnKey, false);
+        config.set<int>(NXR::Ui::kGradientDirKey, 0);
+        this->rebuildUiLater();
+    }}});
 
     b.addSection("Theme");
     b.addControl(makeChoice(this, "Popup Theme", {"Basic", "Normal", "Medium", "Pro"},
@@ -1099,7 +1154,8 @@ void NXRHacksLayer::renderSheet() {
             const float x = dp(12.f) + (bw + gap) * static_cast<float>(i);
             const bool primary = i + 1 == page->footer.size();
             auto* button = CCDrawNode::create();
-            drawRound(button, x, dp(10.f), bw, dp(48.f), dp(12.f), primary ? fromColor(Pal::accent()) : fillColor(30, 41, 60));
+            if (primary) drawAccent(button, x, dp(10.f), bw, dp(48.f), dp(12.f));
+            else drawRound(button, x, dp(10.f), bw, dp(48.f), dp(12.f), fillColor(30, 41, 60));
             m_sheetContent->addChild(button);
             auto* label = makeLabel(page->footer[i].first, dp(17.f), primary ? Pal::onAccent() : Pal::text(), CCPoint(0.5f, 0.5f));
             label->setPosition(CCPoint(x + bw * 0.5f, dp(34.f)));

@@ -1,3 +1,5 @@
+#include "../../interface/cocos/nxr_modal.hpp"
+#include "../../interface/cocos/nxr_ui_kit.hpp"
 #include "../../core/nxr_ui_mode.hpp"
 #include "../../core/nxr_theme.hpp"
 #include <Geode/Geode.hpp>
@@ -159,14 +161,7 @@ namespace {
             m_reverse = m_initialReverse = player->m_isGoingLeft;
             m_safe = !g_portalsEnabled;
 
-            auto title = geode::Label::create("Gamemode Swapper", "GoogleSans.fnt"_spr);
-            title->setPosition({size.width / 2.f, size.height - 20.f});
-            title->setScale(0.65f);
-            m_mainLayer->addChild(title);
-
-            auto closeSprite = CCSprite::create("NXR_closeBtn.png"_spr);
-            closeSprite->setScale(0.75f);
-            m_closeBtn->setSprite(closeSprite);
+            NXR::Modal::skin({m_mainLayer, m_bgSprite, m_closeBtn, m_buttonMenu}, "Gamemode Swapper", size.width, size.height);
 
             auto modeMenu = CCMenu::create();
             modeMenu->setLayout(RowLayout::create()->setGap(8.f)->setAutoScale(false));
@@ -223,12 +218,11 @@ namespace {
 
             auto hint = geode::Label::create("Safe Mode: portals are ignored, you keep the chosen gamemode", "GoogleSans.fnt"_spr);
             hint->setScale(0.38f);
-            hint->setOpacity(170);
+            hint->setColor(NXR::Kit::Pal::muted());
             hint->setPosition({size.width / 2.f, 46.f});
             m_mainLayer->addChild(hint);
 
-            auto okSprite = ButtonSprite::create("OK", 90, true, "GoogleSans.fnt"_spr, NXR::Theme::button(), 26.f, 0.7f);
-            auto okButton = CCMenuItemExt::createSpriteExtra(okSprite, [this](CCMenuItemSpriteExtra*) {
+            auto okButton = NXR::Modal::button("OK", 120.f, 34.f, true, [this] {
                 apply();
                 this->onClose(nullptr);
             });

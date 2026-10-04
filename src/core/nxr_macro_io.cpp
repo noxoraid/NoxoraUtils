@@ -7,6 +7,7 @@
 using namespace NXR::Bot;
 
 namespace {
+    constexpr char kMagicV10[4] = {'N', 'X', 'R', 'A'};
     constexpr char kMagicV9[4] = {'N', 'X', 'R', '9'};
     constexpr char kMagicV8[4] = {'N', 'X', 'R', '8'};
     constexpr char kMagicV7[4] = {'N', 'X', 'R', '7'};
@@ -133,7 +134,7 @@ bool NXR::Bot::saveMacro(const Macro& macro, const std::filesystem::path& path) 
     std::ofstream out(tempPath, std::ios::binary | std::ios::trunc);
     if (!out.is_open()) return false;
 
-    out.write(kMagicV9, 4);
+    out.write(kMagicV10, 4);
     putText(out, macro.version);
     putText(out, macro.levelName);
     put(out, macro.levelId);
@@ -173,6 +174,8 @@ bool NXR::Bot::saveMacro(const Macro& macro, const std::filesystem::path& path) 
         for (uint32_t value : stats.toArray()) put(out, value);
     }
 
+    put(out, static_cast<uint8_t>(macro.noclip ? 1 : 0));
+
     out.flush();
     if (!out.good()) {
         out.close();
@@ -205,7 +208,8 @@ bool NXR::Bot::loadMacro(Macro& macro, const std::filesystem::path& path) {
 
     if (std::memcmp(magic, kMagicV7, 4) == 0) return loadV7(in, macro);
 
-    const bool v9 = std::memcmp(magic, kMagicV9, 4) == 0;
+    const bool v10 = std::memcmp(magic, kMagicV10, 4) == 0;
+    const bool v9 = v10 || std::memcmp(magic, kMagicV9, 4) == 0;
     if (!v9 && std::memcmp(magic, kMagicV8, 4) != 0) {
         in.close();
         return loadMacroLegacy(macro, path);
@@ -270,6 +274,12 @@ bool NXR::Bot::loadMacro(Macro& macro, const std::filesystem::path& path) {
             r.stats = NXR::Stats::LevelStats::fromArray(values);
             r.hasStats = true;
         }
+    }
+
+    if (v10) {
+        uint8_t flags = 0;
+        if (!get(in, flags)) return false;
+        r.noclip = (flags & 1) != 0;
     }
 
     char trailing = 0;
