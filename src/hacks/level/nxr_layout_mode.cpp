@@ -259,11 +259,11 @@ class $modify(NXRLayoutModePlayLayer, PlayLayer) {
             if (NXRConfig::get().get<int>(style, 1) == 1) {
                 popup->addSeparator();
                 popup->addConfigToggle("Custom Background", customBg, true);
-                popup->addConfigColor3Hex("Background Color", bgColor, "1E1E1E");
+                popup->addConfigColor("Background Color", bgColor, "1E1E1E");
                 popup->addConfigToggle("Recolor Objects", tint, false);
-                popup->addConfigColor3Hex("Solid Color", solidColor, "9A9A9A");
-                popup->addConfigColor3Hex("Hazard Color", hazardColor, "FF4D4D");
-                popup->addConfigColor3Hex("Orb / Pad / Portal Color", interactColor, "FFD84D");
+                popup->addConfigColor("Solid Color", solidColor, "9A9A9A");
+                popup->addConfigColor("Hazard Color", hazardColor, "FF4D4D");
+                popup->addConfigColor("Orb / Pad / Portal Color", interactColor, "FFD84D");
             }
         });
     }

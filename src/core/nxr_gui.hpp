@@ -1,6 +1,8 @@
 #pragma once
 #include "nxr_hacks.hpp"
 
+namespace NXR::Kit { class PageBuilder; }
+
 namespace NXR {
     FLAlertLayer* MaterialLayer(FLAlertLayer* falert);
 
@@ -18,9 +20,9 @@ namespace NXR {
 
         std::vector<Hack>& getHacks() { return m_hacks; }
 
-        void setCustomWindowCocos(geode::Function<void(cocos2d::CCNode*)> func) { m_handlerCocos = std::move(func); };
+        void setCustomWindowCocos(geode::Function<void(NXR::Kit::PageBuilder&)> func) { m_handlerCocos = std::move(func); };
 
-        void callCustomWindowCocos(cocos2d::CCNode* tab) { if (m_handlerCocos) m_handlerCocos(tab); };
+        void callCustomWindowCocos(NXR::Kit::PageBuilder& page) { if (m_handlerCocos) m_handlerCocos(page); };
 
         bool avaibleCustomWindowCocos() { return m_handlerCocos != nullptr;  };
 
@@ -37,7 +39,7 @@ namespace NXR {
         std::string m_name;
         std::vector<Hack> m_hacks;
 
-        geode::Function<void(cocos2d::CCNode*)> m_handlerCocos = nullptr;
+        geode::Function<void(NXR::Kit::PageBuilder&)> m_handlerCocos = nullptr;
         geode::Function<void()> m_panelImgui = nullptr;
     };
 

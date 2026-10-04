@@ -5,6 +5,16 @@
 #include <vector>
 
 namespace NXR {
+    enum class SliderScale {
+        Linear,
+        Log,
+    };
+
+    struct SliderPreset {
+        std::string label;
+        float value = 0.f;
+    };
+
     class Form {
     public:
         virtual ~Form() = default;
@@ -17,6 +27,9 @@ namespace NXR {
         virtual void addConfigFloatInput(const std::string& label, const std::string& key, float min, float max, float defaultValue = 0.f, geode::Function<void(float)> callback = nullptr) = 0;
         virtual void addConfigColor3Hex(const std::string& label, const std::string& key, const std::string& defaultHex) = 0;
         virtual void addConfigColor4Hex(const std::string& label, const std::string& key, const std::string& defaultHex) = 0;
+        virtual void addConfigChoice(const std::string& label, const std::string& key, const std::vector<std::string>& options, int defaultValue = 0, geode::Function<void(int)> callback = nullptr) = 0;
+        virtual void addConfigSlider(const std::string& label, const std::string& key, float min, float max, float defaultValue, float step, SliderScale scale = SliderScale::Linear, const std::vector<SliderPreset>& presets = {}, geode::Function<void(float)> callback = nullptr, bool integer = false, const std::string& suffix = "") = 0;
+        virtual void addConfigColor(const std::string& label, const std::string& key, const std::string& defaultHex, bool alpha = false, const std::string& rainbowKey = "") = 0;
         virtual void addBoundToggle(const std::string& label, bool current, geode::Function<void(bool)> setter) = 0;
         virtual void addSeparator(float height = 1.f) = 0;
         virtual void requestRebuild() = 0;

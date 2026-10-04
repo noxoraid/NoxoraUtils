@@ -7,7 +7,7 @@
 	},
 	"id": "noxorautils.nxr",
 	"name": "NoxoraUtils",
-	"version": "v1.4.14",
+	"version": "v1.4.16",
 	"developer": "Noxora",
 	"description": "Feature-rich mod menu (Windows, macOS, Android)  with a macro bot, noclip, hitboxes, trajectory and editor tools.",
 	"links": {
@@ -27,6 +27,7 @@
 		],
 		"files": [
 			"res/click_indicator.mp3",
+			"changelog.md",
 			"res/GoogleSans-Regular.ttf"
 		],
 		"fonts": {

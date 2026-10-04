@@ -339,8 +339,8 @@ class $modify(NXRTrajectoryPlayLayer, PlayLayer) {
             interval = hack.formatAdditionalSetting("interval")
         ](NXR::Form& form) {
             auto* popup = &form;
-            popup->addConfigColor3Hex("Hold Color", holdColor, "39FF6E");
-            popup->addConfigColor3Hex("Release Color", releaseColor, "FF3B3B");
+            popup->addConfigColor("Hold Color", holdColor, "39FF6E");
+            popup->addConfigColor("Release Color", releaseColor, "FF3B3B");
             popup->addConfigIntInput("Length (steps)", length, 30, 480, 180);
             popup->addConfigFloatInput("Line Thickness", thickness, 1.f, 10.f, 3.f);
             popup->addConfigIntInput("Update Every (frames)", interval, 1, 10, 2);

@@ -33,7 +33,18 @@ class $modify(NXRPracticeClickPlayLayer, PlayLayer) {
             delayKey = hack.formatAdditionalSetting("delay")
         ](NXR::Form& form) {
             form.addConfigToggle("Spam Active (key 1)", activeKey, false);
-            form.addConfigIntInput("Delay ms (0 - 10000)", delayKey, 0, 10000, 100);
+            form.addConfigSlider("Delay", delayKey, 0.f, 10000.f, 100.f, 1.f, NXR::SliderScale::Log, {
+                {"0", 0.f},
+                {"10", 10.f},
+                {"50", 50.f},
+                {"100", 100.f},
+                {"500", 500.f},
+                {"1000", 1000.f}
+            }, nullptr, true, " ms");
+        });
+
+        hack.setSummary([delayKey = hack.formatAdditionalSetting("delay")]() {
+            return fmt::format("{} ms", NXRConfig::get().get<int>(delayKey, 100));
         });
 
         hack.setHandler([](bool state) {

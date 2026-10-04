@@ -29,4 +29,8 @@ public:
 
     void setSizeScale(float scale);
     float getSizeScale() const { return m_scale; }
+
+    void moveTo(float x, float y);
+    void moveToCorner(int corner);
+    cocos2d::CCPoint getTarget() const { return m_target; }
 };

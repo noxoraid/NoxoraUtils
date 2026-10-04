@@ -371,15 +371,15 @@ class $modify(NXRShowHitboxPlayLayer, PlayLayer) {
             popup->addConfigToggle("Show Inner Box", kInnerKey, true);
             popup->addConfigToggle("Show Objects", kObjectsKey, true);
             popup->addSeparator();
-            popup->addConfigColor4Hex("Solid Blocks", kSolidKey, "#003FFFFF");
-            popup->addConfigColor4Hex("Passable Blocks", kPassableKey, "#00FFFFFF");
-            popup->addConfigColor4Hex("Spikes And Saws", kDangerKey, "#FF0000FF");
-            popup->addConfigColor4Hex("Triggers", kTriggerKey, "#FF00E6FF");
-            popup->addConfigColor4Hex("Other Objects", kOtherKey, "#00FF00FF");
+            popup->addConfigColor("Solid Blocks", kSolidKey, "#003FFFFF", true);
+            popup->addConfigColor("Passable Blocks", kPassableKey, "#00FFFFFF", true);
+            popup->addConfigColor("Spikes And Saws", kDangerKey, "#FF0000FF", true);
+            popup->addConfigColor("Triggers", kTriggerKey, "#FF00E6FF", true);
+            popup->addConfigColor("Other Objects", kOtherKey, "#00FF00FF", true);
             popup->addSeparator();
-            popup->addConfigColor4Hex("Player Box", kPlayerColorKey, "#FF0000FF");
-            popup->addConfigColor4Hex("Player Inner Box", kInnerColorKey, "#003FFFFF");
-            popup->addConfigColor4Hex("Player Rotated Box", kRotatedKey, "#800000FF");
+            popup->addConfigColor("Player Box", kPlayerColorKey, "#FF0000FF", true);
+            popup->addConfigColor("Player Inner Box", kInnerColorKey, "#003FFFFF", true);
+            popup->addConfigColor("Player Rotated Box", kRotatedKey, "#800000FF", true);
         });
 
         hack.setHandler([](bool enabled) {

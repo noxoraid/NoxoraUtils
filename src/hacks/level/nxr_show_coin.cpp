@@ -83,7 +83,7 @@ class $modify(NXRShowCoinPlayLayer, PlayLayer) {
             p2Key = hack.formatAdditionalSetting("from_p2")
         ](NXR::Form& form) {
             auto* popup = &form;
-            popup->addConfigColor3Hex("Line Color", colorKey, "FFD700");
+            popup->addConfigColor("Line Color", colorKey, "FFD700");
             popup->addConfigIntInput("Opacity", opacityKey, 0, 255, 220);
             popup->addConfigFloatInput("Thickness", thickKey, 0.5f, 10.f, 1.5f);
             popup->addSeparator();

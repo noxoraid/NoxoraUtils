@@ -1,3 +1,16 @@
+# v1.4.16
+
+- **New:** the mobile panel is rebuilt as one landscape layout with a tab rail, search bar, status chips, favorites (star on every hack), and side sheets for hack settings and info instead of popups.
+- **New:** touch-first controls: segmented choice, log slider with presets and a number pad for manual input, and a color picker (saturation/value, hue, alpha, HEX/RGB, recent, presets, Apply/Cancel).
+- **New:** Settings tab with UI size, panel opacity and position, logo size and position, hide logo in levels/editor, keybinds, theme, config reset, import and export. About tab shows version, links, build info and the changelog.
+- **Change:** Speedhack uses a log slider with presets, Click Between Frames uses a Low/High/Extreme choice, Super Fast Practice Click uses a delay slider. Config keys are unchanged.
+- **Change:** all hack colors use the new color picker. The desktop ImGui UI is not changed and has fallbacks for the new form controls.
+
+# v1.4.15
+
+- **Fix:** Speedhack and Auto Sync Music audio sounding broken and choppy. The pitch is now set only on the background music channel (same way the bot slow mode does it) and only when it actually changes. The global channel is no longer touched.
+- **Change:** Auto Sync Music no longer re-seeks the music. It only adjusts the pitch gently from the measured speed and the music drift, with a small dead zone, so it does not warble.
+
 # v1.4.14
 
 - **Fix:** overlay button not opening the panel. Touch handling is back to exactly how it worked before v1.4.12. The only change kept is that the hidden state is no longer saved to the config.

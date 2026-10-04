@@ -29,6 +29,10 @@ namespace NXR {
 
         void setForm(geode::Function<void(NXR::Form&)> func) { m_form = std::move(func); }
 
+        void setSummary(geode::Function<std::string()> func) { m_summary = std::move(func); }
+        bool hasSummary() { return m_summary != nullptr; }
+        std::string getSummary() { return m_summary ? m_summary() : std::string(); }
+
         bool getEnabled() const;
         bool getDisabled() const;
         bool getEarlyInit() const;
@@ -75,6 +79,7 @@ namespace NXR {
         geode::Keybind m_keybind;
 
         geode::Function<void(NXR::Form&)> m_form = nullptr;
+        geode::Function<std::string()> m_summary = nullptr;
 
         bool m_earlyInit = true;
         geode::Function<bool()> m_customCheatingCheck = nullptr;

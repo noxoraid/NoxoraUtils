@@ -30,7 +30,13 @@ class $modify(NXRClickBetweenBaseGameLayer, GJBaseGameLayer) {
         auto& hack = NXR::Gui::get().getWindow("Global").findHackByName("Click Between Frames");
 
         hack.setForm([modeKey = hack.formatAdditionalSetting("mode")](NXR::Form& form) {
-            form.addConfigIntInput("Mode (0 Low, 1 High, 2 Extreme)", modeKey, 0, 2, 1);
+            form.addConfigChoice("Mode", modeKey, {"Low", "High", "Extreme"}, 1);
+        });
+
+        hack.setSummary([modeKey = hack.formatAdditionalSetting("mode")]() {
+            static const char* names[] = {"Low", "High", "Extreme"};
+            const int mode = std::clamp(NXRConfig::get().get<int>(modeKey, 1), 0, 2);
+            return std::string(names[mode]);
         });
 
         NXR::trySetPriority(self, "GJBaseGameLayer::update", -100);

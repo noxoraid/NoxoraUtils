@@ -36,7 +36,7 @@ class $modify(NXRNoclipPlayLayer, PlayLayer) {
         ](NXR::Form& form) {
             auto* popup = &form;
             popup->addConfigToggle("Tint On Death", tintOnDeathKey, false);
-            popup->addConfigColor3Hex("Tint Color", colorKey, "FF00000");
+            popup->addConfigColor("Tint Color", colorKey, "FF00000");
             popup->addConfigIntInput("Opacity", opacityKey, 0, 255, 100);
             popup->addConfigFloatInput("Fade Speed", fadeKey, 0.f, 1.f, 0.35f);
             popup->addSeparator();

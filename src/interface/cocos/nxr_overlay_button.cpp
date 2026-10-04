@@ -56,6 +56,22 @@ void NXROverlayButton::setSizeScale(float scale) {
     NXRConfig::get().set<float>("nxr.ui_icon.scale", m_scale);
 }
 
+void NXROverlayButton::moveTo(float x, float y) {
+    auto win_size = CCDirector::sharedDirector()->getWinSize();
+    float r = radius();
+    m_target.x = std::clamp(x, r, win_size.width - r);
+    m_target.y = std::clamp(y, r, win_size.height - r);
+    savePos();
+}
+
+void NXROverlayButton::moveToCorner(int corner) {
+    auto win_size = CCDirector::sharedDirector()->getWinSize();
+    float r = radius() + 8.f;
+    float x = (corner == 1 || corner == 3) ? win_size.width - r : r;
+    float y = (corner == 2 || corner == 3) ? win_size.height - r : r;
+    moveTo(x, y);
+}
+
 void NXROverlayButton::setVisible(bool visible) {
     if (isVisible() == visible) return;
 

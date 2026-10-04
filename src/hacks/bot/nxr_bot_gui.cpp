@@ -9,7 +9,7 @@
 #include "../../core/nxr_macro_import.hpp"
 #include "../../core/nxr_keybinds.hpp"
 #include "../../core/nxr_ui_mode.hpp"
-#include "../../interface/cocos/nxr_hacks_tab.hpp"
+#include "../../interface/cocos/nxr_ui_page.hpp"
 #include "../../interface/cocos/nxr_hack_settings_popup.hpp"
 #include "../../interface/cocos/nxr_bot_popups.hpp"
 #include "../../interface/imgui/nxr_imgui_menu.hpp"
@@ -708,21 +708,21 @@ $execute {
         popup->addConfigFloatInput("Ramp X", kIndHudXKey, 10.f, 300.f, 70.f);
         popup->addConfigFloatInput("Mirror Size", kIndHudScaleKey, 0.5f, 3.f, 1.7f);
         popup->addConfigToggle("Player Line And Marker", kIndPlayerLineKey, true);
-        popup->addConfigColor3Hex("Player 2 Color", kIndP2ColorKey, "C84DFF");
+        popup->addConfigColor("Player 2 Color", kIndP2ColorKey, "C84DFF");
         popup->addSeparator();
-        popup->addConfigColor3Hex("Line Color", kIndTrailColorKey, "39FF6E");
+        popup->addConfigColor("Line Color", kIndTrailColorKey, "39FF6E");
         popup->addConfigIntInput("Line Length (frames)", kIndTrailAheadKey, 30, 2400, 300);
         popup->addConfigFloatInput("Line Width", kIndTrailWidthKey, 0.5f, 12.f, 2.5f);
         popup->addSeparator();
         popup->addSeparator();
-        popup->addConfigColor3Hex("Line Color", kIndLineKey, "FFFFFF");
-        popup->addConfigColor3Hex("Background Color", kIndBodyKey, "00F0FF");
+        popup->addConfigColor("Line Color", kIndLineKey, "FFFFFF");
+        popup->addConfigColor("Background Color", kIndBodyKey, "00F0FF");
         popup->addConfigIntInput("Background Opacity", kIndBodyOpacityKey, 0, 255, 70);
         popup->addConfigFloatInput("Fade Time (s)", kIndFadeKey, 0.05f, 3.f, 0.8f);
         popup->addConfigFloatInput("Slide Distance", kIndSlideKey, 0.f, 400.f, 0.f);
         popup->addSeparator();
         popup->addConfigToggle("Show Perfect", kIndPerfectKey, true);
-        popup->addConfigColor3Hex("Perfect Color", kIndPerfectColorKey, "39FF6E");
+        popup->addConfigColor("Perfect Color", kIndPerfectColorKey, "39FF6E");
         popup->addSeparator();
         popup->addConfigToggle("Click Sound", kIndSoundKey, true);
         popup->addConfigIntInput("Sound Volume", kIndSoundVolumeKey, 0, 100, 80);
@@ -737,53 +737,44 @@ $execute {
 
     win.setImguiPanel(drawBotPanel);
 
-    win.setCustomWindowCocos([](cocos2d::CCNode* node) {
-        auto* tab = static_cast<NXRHacksTab*>(node);
-
-        tab->addPadding(6.f);
-        tab->addRadioRow({"Disabled", "Record", "Playback"}, []{ return currentMode(); }, [](int mode) { return selectMode(mode); });
-        tab->addSelector("Replays", []{ return replayLabel(); }, [](std::function<void()> refresh) {
+    win.setCustomWindowCocos([](NXR::Kit::PageBuilder& page) {
+        page.addPadding(2.f);
+        page.addRadioRow({"Disabled", "Record", "Playback"}, [] { return currentMode(); }, [](int mode) { return selectMode(mode); });
+        page.addSelector("Replays", [] { return replayLabel(); }, [](std::function<void()> refresh) {
             NXR::Ui::showPopup(NXRReplayPickerPopup::create("Select Replay", "Select", [refresh](const std::string& name) {
                 State::get().selectedReplay = name;
                 refresh();
             }, true), "Select Replay");
         });
-        tab->addConfigButton("Settings", [] {
-            NXRHackSettingsPopup::open(g_botSettings, "panel:Bot");
-        });
-        tab->addText("Bot Type", 0.5f);
-        tab->addRadioRow({"Auto", "Hold", "Click"},
+        page.addButtons({{"Bot Settings", [] { NXRHackSettingsPopup::open(g_botSettings, "panel:Bot"); }}});
+        page.addSection("Bot Type");
+        page.addRadioRow({"Auto", "Hold", "Click"},
             [] { return std::clamp(NXRConfig::get().get<int>("nxr.bot.type", 1), 1, 3) - 1; },
             [](int index) {
                 NXRConfig::get().set<int>("nxr.bot.type", index + 1);
                 State::get().clickCredits = 0;
                 return index;
             });
-        tab->addConfigToggle("Also Save As JSON", kSaveJsonKey, false);
-        tab->addConfigFloatInput("Speed (0.1 - 10000)", kSpeedKey, kDefaultSpeed, 0.1f, 10000.f);
-        tab->addConfigFloatInput("Frame Step (0.1 - 10)", "nxr.bot.frame_step", 1.f, 0.1f, 10.f);
-        tab->prepareNewRow();
-        tab->m_currentRow->addChild(BotInfoNode::create());
-        tab->m_currentRow->updateLayout();
-        tab->prepareNewRow();
-        tab->m_currentRow->addChild(BotInfoNode::create(1));
-        tab->m_currentRow->updateLayout();
+        page.addConfigToggle("Also Save As JSON", kSaveJsonKey, false);
+        page.addConfigFloatInput("Speed (0.1 - 10000)", kSpeedKey, 0.1f, 10000.f, kDefaultSpeed);
+        page.addConfigFloatInput("Frame Step (0.1 - 10)", "nxr.bot.frame_step", 0.1f, 10.f, 1.f);
+        page.addNode(BotInfoNode::create(), 30.f);
+        page.addNode(BotInfoNode::create(1), 30.f);
 
-        tab->addConfigButton("New", []{ startNewFlow(); }, "Save", []{ saveReplay(); });
-        tab->addConfigButton(
-            "Load", []{
+        page.addButtons({{"New", [] { startNewFlow(); }}, {"Save", [] { saveReplay(); }}});
+        page.addButtons({
+            {"Load", [] {
                 NXR::Ui::showPopup(NXRReplayPickerPopup::create("Load Replay", "Load", [](const std::string& name) { loadReplayByName(name); }), "Load Replay");
-            },
-            "Delete", []{
+            }},
+            {"Delete", [] {
                 NXR::Ui::showPopup(NXRReplayPickerPopup::create("Delete Replay", "Delete", [](const std::string& name) { deleteReplayByName(name); }), "Delete Replay");
-            }
-        );
-        tab->addConfigButton("Rename", []{ startRenameFlow(); }, "Restore Last Autosave", []{ restoreAutosave(); });
-        tab->addConfigButton("Browse Replays", []{ openBrowser(); }, "Merge Replays", []{ startMergeFlow(); });
-        tab->addConfigButton("Export JSON", []{
-            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
+            }}
         });
-        tab->addPadding(6.f);
+        page.addButtons({{"Rename", [] { startRenameFlow(); }}, {"Restore Autosave", [] { restoreAutosave(); }}});
+        page.addButtons({{"Browse Replays", [] { openBrowser(); }}, {"Merge Replays", [] { startMergeFlow(); }}});
+        page.addButtons({{"Export JSON", [] {
+            NXR::Ui::showPopup(NXRReplayPickerPopup::create("Export JSON", "Export", [](const std::string& name) { exportReplayJson(name); }), "Export JSON");
+        }}});
     });
     auto& keybinds = NXR::Keybinds::get();
     keybinds.registerAction("nxr.bot::disable", "Bot: Disabled", geode::Keybind(), [](bool repeat) {

@@ -144,6 +144,14 @@ public:
         return defaultValue;
     }
 
+    void clear() {
+        m_values.clear();
+    }
+
+    bool has(std::string_view key) const {
+        return m_values.find(key) != m_values.end();
+    }
+
 private:
     using Value = std::variant<bool, int, float, std::string>;
 

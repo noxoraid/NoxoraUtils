@@ -516,6 +516,56 @@ namespace {
             ImGui::PopID();
         }
 
+        void addConfigChoice(const std::string& label, const std::string& key, const std::vector<std::string>& options, int defaultValue, geode::Function<void(int)> callback) override {
+            if (options.empty()) return;
+            ImGui::PushID(m_id++);
+            const int count = static_cast<int>(options.size());
+            const int current = std::clamp(NXRConfig::get().get<int>(key, defaultValue), 0, count - 1);
+            ImGui::TextUnformatted(label.c_str());
+            const int picked = NXR::Imgui::choice(options, current);
+            if (picked >= 0 && picked != current) {
+                NXRConfig::get().set<int>(key, picked);
+                if (callback) laterCall(std::move(callback), picked);
+            }
+            ImGui::PopID();
+        }
+
+        void addConfigSlider(const std::string& label, const std::string& key, float min, float max, float defaultValue, float, NXR::SliderScale, const std::vector<NXR::SliderPreset>& presets, geode::Function<void(float)> callback, bool integer, const std::string&) override {
+            auto holder = std::make_shared<geode::Function<void(float)>>(std::move(callback));
+            if (integer) {
+                addConfigIntInput(label, key, static_cast<int>(std::lround(min)), static_cast<int>(std::lround(max)), static_cast<int>(std::lround(defaultValue)), [holder](int value) {
+                    if (*holder) (*holder)(static_cast<float>(value));
+                });
+            } else {
+                addConfigFloatInput(label, key, min, max, defaultValue, [holder](float value) {
+                    if (*holder) (*holder)(value);
+                });
+            }
+
+            if (presets.empty()) return;
+            ImGui::PushID(m_id++);
+            for (size_t i = 0; i < presets.size(); i++) {
+                if (i > 0) ImGui::SameLine();
+                ImGui::PushID(static_cast<int>(i));
+                if (tapButton(presets[i].label.c_str(), ImVec2(0.f, 0.f), false)) {
+                    const float value = std::clamp(presets[i].value, min, max);
+                    if (integer) NXRConfig::get().set<int>(key, static_cast<int>(std::lround(value)));
+                    else NXRConfig::get().set<float>(key, value);
+                    laterCall([holder](float v) {
+                        if (*holder) (*holder)(v);
+                    }, value);
+                }
+                ImGui::PopID();
+            }
+            ImGui::PopID();
+        }
+
+        void addConfigColor(const std::string& label, const std::string& key, const std::string& defaultHex, bool alpha, const std::string& rainbowKey) override {
+            if (alpha) addConfigColor4Hex(label, key, defaultHex);
+            else addConfigColor3Hex(label, key, defaultHex);
+            if (!rainbowKey.empty()) addConfigToggle("Rainbow", rainbowKey, false, nullptr);
+        }
+
         void addSeparator(float) override {
             ImGui::Spacing();
             ImGui::Separator();
