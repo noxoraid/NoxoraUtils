@@ -551,9 +551,9 @@ namespace {
                     const float value = std::clamp(presets[i].value, min, max);
                     if (integer) NXRConfig::get().set<int>(key, static_cast<int>(std::lround(value)));
                     else NXRConfig::get().set<float>(key, value);
-                    laterCall([holder](float v) {
-                        if (*holder) (*holder)(v);
-                    }, value);
+                    geode::queueInMainThread([holder, value] {
+                        if (*holder) (*holder)(value);
+                    });
                 }
                 ImGui::PopID();
             }
