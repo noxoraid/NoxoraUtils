@@ -1,5 +1,7 @@
 # v1.4.18
 
+- **New:** Frame Window Counter (Bot tab). Every orb you click shows its frame window (how many physics frames it could be clicked in) as a number on the orb, and a counter list on the left counts your clicks by margin to the edge of the window (0 = frame perfect). A sound plays at every orb click. Show Counter and Show Orb Numbers can be hidden separately, with sound volume, counter size and height, and optional reset on every new attempt. Works while playing, recording and in playback.
+- **Fix:** build errors in the new scroll grip and panel scrollbar (const-correctness) on Windows, macOS and Android.
 - **Change:** playback now runs on any level, even when the replay Level ID is different. The "Validate Level ID" option is removed and a running replay is no longer stopped when the level changes.
 - **Change:** the different-level notice is short and split into two lines (Replay ID and Level ID) instead of one long message.
 
