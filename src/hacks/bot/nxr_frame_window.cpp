@@ -43,7 +43,7 @@ namespace {
 
     constexpr int kRows = 8;
     constexpr size_t kRing = 512;
-    constexpr int kSimsPerFrame = 3;
+    constexpr int kSimsPerFrame = 8;
     constexpr std::array<int, kRows - 1> kFpsSteps = {20, 30, 45, 60, 90, 120, 240};
 
     struct Frame {
@@ -71,6 +71,8 @@ namespace {
         int k = 0;
         int late = 0;
         int early = 0;
+        int lo = 0;
+        int hi = 0;
         CCPoint pos;
         std::vector<NXR::Practice::SavedPlayer> states;
         std::vector<char> holds;
@@ -81,6 +83,7 @@ namespace {
         bool clicked = false;
         bool seen = false;
         CCPoint pos;
+        int64_t key = 0;
     };
 
     struct Result {
@@ -91,7 +94,10 @@ namespace {
 
     struct Marker {
         Ref<CCNode> node;
+        CCDrawNode* circle = nullptr;
+        CCLabelBMFont* label = nullptr;
         CCPoint world;
+        int64_t key = -1;
     };
 
     struct Row {
@@ -140,7 +146,7 @@ namespace {
     bool soundOn() { return NXRConfig::get().get<bool>(kSoundKey, true); }
 
     float tps() { return std::max(1.f, NXR::Bot::effectiveTps()); }
-    int horizonTicks() { return std::clamp(NXRConfig::get().get<int>(kHorizonKey, 110), 40, 480); }
+    int horizonTicks() { return std::clamp(NXRConfig::get().get<int>(kHorizonKey, 80), 40, 480); }
     int maxWindow() { return std::clamp(NXRConfig::get().get<int>(kMaxKey, 32), 4, 64); }
 
     int64_t keyNow(PlayLayer* pl) {
@@ -271,36 +277,65 @@ namespace {
         g_markers.clear();
     }
 
-    void spawnMarker(PlayLayer* pl, const Result& result, int row) {
-        if (!pl || !pl->m_uiLayer || !pl->m_objectLayer || !showMarks()) return;
+    void paintMarker(Marker& marker, const ccColor3B& c, const std::string& text) {
+        if (marker.circle) {
+            marker.circle->clear();
+            CCPoint verts[48];
+            const float radius = 13.f;
+            for (int i = 0; i < 48; i++) {
+                const float angle = static_cast<float>(i) * (3.14159265f * 2.f) / 48.f;
+                verts[i] = CCPoint(radius * std::cos(angle), radius * std::sin(angle));
+            }
+            marker.circle->drawPolygon(verts, 48, ccc4f(0.f, 0.f, 0.f, 0.f), 4.f, ccc4f(0.f, 0.f, 0.f, 1.f));
+            marker.circle->drawPolygon(verts, 48, ccc4f(0.f, 0.f, 0.f, 0.f), 2.f, ccc4f(c.r / 255.f, c.g / 255.f, c.b / 255.f, 1.f));
+        }
+        if (marker.label) {
+            marker.label->setString(text.c_str());
+            marker.label->setColor(c);
+        }
+    }
+
+    std::string markerText(const Result& result) {
+        const int need = static_cast<int>(std::ceil(tps() / static_cast<float>(std::max(1, result.ticks))));
+        return fmt::format("{}{}f ({}fps)", result.ticks, result.capped ? "+" : "", need);
+    }
+
+    Marker* findMarker(int64_t key) {
+        for (auto& marker : g_markers) {
+            if (marker.key == key && marker.node && marker.node->getParent()) return &marker;
+        }
+        return nullptr;
+    }
+
+    Marker* spawnMarker(PlayLayer* pl, int64_t key, const CCPoint& pos) {
+        if (!pl || !pl->m_uiLayer || !pl->m_objectLayer || !showMarks()) return nullptr;
+        if (auto* existing = findMarker(key)) return existing;
 
         auto* node = CCNode::create();
-        const ccColor3B c = rowColor(row);
         const float size = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kMarkSizeKey, 100), 40, 250)) / 100.f;
 
         auto* circle = CCDrawNode::create();
-        CCPoint verts[48];
-        const float radius = 13.f;
-        for (int i = 0; i < 48; i++) {
-            const float angle = static_cast<float>(i) * (3.14159265f * 2.f) / 48.f;
-            verts[i] = CCPoint(radius * std::cos(angle), radius * std::sin(angle));
-        }
-        circle->drawPolygon(verts, 48, ccc4f(0.f, 0.f, 0.f, 0.f), 4.f, ccc4f(0.f, 0.f, 0.f, 1.f));
-        circle->drawPolygon(verts, 48, ccc4f(0.f, 0.f, 0.f, 0.f), 2.f, ccc4f(c.r / 255.f, c.g / 255.f, c.b / 255.f, 1.f));
         node->addChild(circle, 0);
 
-        const int need = static_cast<int>(std::ceil(tps() / static_cast<float>(std::max(1, result.ticks))));
-        auto* label = CCLabelBMFont::create(fmt::format("{}{}f ({}fps)", result.ticks, result.capped ? "+" : "", need).c_str(), "bigFont.fnt");
+        auto* label = CCLabelBMFont::create("...", "bigFont.fnt");
         label->setAnchorPoint(CCPoint(1.f, 0.5f));
         label->setPosition(CCPoint(-18.f, 0.f));
         label->setScale(0.5f);
-        label->setColor(c);
         node->addChild(label, 1);
 
         node->setScale(std::abs(pl->m_objectLayer->getScaleY()) * size);
-        node->setPosition(pl->m_objectLayer->convertToWorldSpace(result.pos));
+        node->setPosition(pl->m_objectLayer->convertToWorldSpace(pos));
         pl->m_uiLayer->addChild(node, 50);
-        g_markers.push_back({Ref<CCNode>(node), result.pos});
+
+        Marker marker;
+        marker.node = Ref<CCNode>(node);
+        marker.circle = circle;
+        marker.label = label;
+        marker.world = pos;
+        marker.key = key;
+        paintMarker(marker, ccc3(255, 255, 255), "...");
+        g_markers.push_back(marker);
+        return &g_markers.back();
     }
 
     void updateMarkers(PlayLayer* pl) {
@@ -345,7 +380,7 @@ namespace {
         g_counts[static_cast<size_t>(row)]++;
         g_hudDirty = true;
         g_pulse = row;
-        spawnMarker(pl, result, row);
+        if (auto* marker = spawnMarker(pl, key, result.pos)) paintMarker(*marker, rowColor(row), markerText(result));
         if (sound) playSound(row);
     }
 
@@ -449,41 +484,48 @@ namespace {
     }
 
     void stepJob(PlayLayer* pl, Job& job) {
+        const int64_t t = static_cast<int64_t>(job.tick);
+
         if (job.phase == 0) {
             if (!survives(pl, job, 0)) {
                 job.phase = 9;
                 return;
             }
+            const int64_t holdEnd = job.release > 0 ? static_cast<int64_t>(job.release) : t + job.horizon;
+            const int maxLate = static_cast<int>(std::clamp<int64_t>(holdEnd - t - 1, 0, job.window));
             job.phase = 1;
-            job.k = 1;
+            job.lo = 0;
+            job.hi = maxLate + 1;
             return;
         }
 
         if (job.phase == 1) {
-            const int64_t holdEnd = job.release > 0 ? static_cast<int64_t>(job.release) : static_cast<int64_t>(job.tick) + job.horizon;
-            const int64_t holdLen = holdEnd - static_cast<int64_t>(job.tick);
-            if (job.k > job.window || job.k >= holdLen || !survives(pl, job, job.k)) {
-                job.late = job.k - 1;
+            if (job.hi - job.lo <= 1) {
+                job.late = job.lo;
+                int maxEarly = job.window;
+                if (job.prevRelease > 0) maxEarly = static_cast<int>(std::clamp<int64_t>(t - static_cast<int64_t>(job.prevRelease) - 1, 0, job.window));
                 job.phase = 2;
-                job.k = -1;
+                job.lo = 0;
+                job.hi = maxEarly + 1;
                 return;
             }
-            job.k++;
+            const int mid = (job.lo + job.hi) / 2;
+            if (survives(pl, job, mid)) job.lo = mid;
+            else job.hi = mid;
             return;
         }
 
         if (job.phase == 2) {
-            const int64_t floorK = job.prevRelease > 0
-                ? static_cast<int64_t>(job.prevRelease) - static_cast<int64_t>(job.tick) + 1
-                : -static_cast<int64_t>(job.window);
-            if (-job.k > job.window || job.k < floorK || !survives(pl, job, job.k)) {
-                job.early = -job.k - 1;
+            if (job.hi - job.lo <= 1) {
+                job.early = job.lo;
                 const bool capped = job.late >= job.window || job.early >= job.window;
                 storeResult(pl, job.key, job.late + job.early + 1, capped, job.pos, false);
                 job.phase = 9;
                 return;
             }
-            job.k--;
+            const int mid = (job.lo + job.hi) / 2;
+            if (survives(pl, job, -mid)) job.lo = mid;
+            else job.hi = mid;
             return;
         }
     }
@@ -616,10 +658,13 @@ namespace {
             for (auto* obj : CCArrayExt<GameObject*>(rings)) {
                 if (!obj) continue;
                 auto& track = g_orbs[obj];
-                if (track.overlap == 0) track.pos = obj->getPosition();
                 track.overlap++;
                 track.seen = true;
-                if (clicked) track.clicked = true;
+                if (clicked && !track.clicked) {
+                    track.clicked = true;
+                    track.pos = player->getPosition();
+                    track.key = keyNow(pl);
+                }
             }
         }
 
@@ -629,8 +674,7 @@ namespace {
                 continue;
             }
             if (it->second.clicked && it->second.overlap > 0) {
-                const int64_t key = keyNow(pl);
-                storeResult(pl, key, it->second.overlap, false, it->second.pos, false);
+                storeResult(pl, it->second.key, it->second.overlap, false, it->second.pos, false);
             }
             it = g_orbs.erase(it);
         }
@@ -680,6 +724,7 @@ namespace {
                 else playSound(row);
             } else {
                 playSound(3);
+                spawnMarker(pl, key, player->getPosition());
                 if (!onOrb) {
                     auto& st = NXR::Bot::State::get();
                     bool queued = false;
@@ -728,7 +773,7 @@ class $modify(NXRFrameWindowGameLayer, GJBaseGameLayer) {
             form.addConfigToggle("Click Sound", kSoundKey, true);
             form.addConfigSlider("Sound Volume", kVolumeKey, 0.f, 100.f, 80.f, 1.f, NXR::SliderScale::Linear, {{"25%", 25.f}, {"50%", 50.f}, {"80%", 80.f}, {"100%", 100.f}}, nullptr, true, "%");
             form.addSeparator();
-            form.addConfigSlider("Check Length (ticks)", kHorizonKey, 40.f, 480.f, 110.f, 5.f, NXR::SliderScale::Linear, {{"60", 60.f}, {"110", 110.f}, {"200", 200.f}, {"300", 300.f}}, nullptr, true);
+            form.addConfigSlider("Check Length (ticks)", kHorizonKey, 40.f, 480.f, 80.f, 5.f, NXR::SliderScale::Linear, {{"60", 60.f}, {"80", 80.f}, {"200", 200.f}, {"300", 300.f}}, nullptr, true);
             form.addConfigSlider("Max Window (ticks)", kMaxKey, 4.f, 64.f, 32.f, 1.f, NXR::SliderScale::Linear, {{"16", 16.f}, {"32", 32.f}, {"64", 64.f}}, nullptr, true);
             form.addSeparator();
             form.addConfigSlider("Marker Size", kMarkSizeKey, 40.f, 250.f, 100.f, 5.f, NXR::SliderScale::Linear, {{"70%", 70.f}, {"100%", 100.f}, {"150%", 150.f}}, nullptr, true, "%");

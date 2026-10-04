@@ -1,4 +1,3 @@
-#include <cmath>
 #include "nxr_level_stats.hpp"
 #include <Geode/modify/PlayLayer.hpp>
 #include <map>
@@ -127,43 +126,6 @@ NXR::Stats::LevelStats NXR::Stats::compute(PlayLayer* layer) {
     }
 
     return stats;
-}
-
-namespace {
-    uint64_t mix64(uint64_t x) {
-        x += 0x9e3779b97f4a7c15ull;
-        x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ull;
-        x = (x ^ (x >> 27)) * 0x94d049bb133111ebull;
-        return x ^ (x >> 31);
-    }
-
-    cocos2d::CCPoint startPointOf(GameObject* object) {
-        if constexpr (requires { object->m_startPosition; }) return object->m_startPosition;
-        return object->getPosition();
-    }
-}
-
-uint64_t NXR::Stats::fingerprint(PlayLayer* layer) {
-    if (!layer || !layer->m_objects) return 0;
-
-    uint64_t sum = 0;
-    uint64_t count = 0;
-    for (auto* object : geode::cocos::CCArrayExt<GameObject*>(layer->m_objects)) {
-        if (!object) continue;
-        if (categorize(object) == Cat::Deco) continue;
-
-        const auto p = startPointOf(object);
-        const int64_t ix = static_cast<int64_t>(std::llround(p.x * 100.f));
-        const int64_t iy = static_cast<int64_t>(std::llround(p.y * 100.f));
-        uint64_t h = mix64(static_cast<uint64_t>(static_cast<int64_t>(object->m_objectID)));
-        h = mix64(h ^ static_cast<uint64_t>(ix));
-        h = mix64(h ^ static_cast<uint64_t>(iy) * 0x100000001b3ull);
-        sum += h;
-        count++;
-    }
-
-    const uint64_t result = mix64(sum ^ (count * 0x9e3779b97f4a7c15ull));
-    return result == 0 ? 1 : result;
 }
 
 void NXR::Stats::remember(const LevelStats& stats) {

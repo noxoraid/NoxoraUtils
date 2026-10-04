@@ -158,8 +158,6 @@ namespace {
         m.fps = limiter ? static_cast<float>(std::clamp(cfg.get<int>("nxr.player.fps_limiter::fps", 240), 0, 5000000)) : 0.f;
         m.version = geode::Mod::get()->getVersion().toVString();
 
-        if (pl) m.levelHash = NXR::Stats::fingerprint(pl);
-
         if (pl && pl->m_level) {
             m.levelName = pl->m_level->m_levelName;
             m.levelId = static_cast<int32_t>(pl->m_level->m_levelID.value());
@@ -311,39 +309,6 @@ namespace {
     // How far the live player may stray from the recorded row before playback rewrites it.
     // Positions are in game units, rotation in degrees. Small values keep the replay exact;
     // large values would let tiny float differences accumulate into a death.
-    bool levelMatchesMacro(PlayLayer* pl) {
-        static const void* cachedLayer = nullptr;
-        static uint64_t cachedKey = 0;
-        static bool cachedResult = true;
-
-        auto& m = State::get().current;
-        if (!pl) return true;
-
-        const uint64_t key = m.levelHash != 0
-            ? m.levelHash
-            : (m.hasStats ? (static_cast<uint64_t>(m.stats.objects) << 40) ^ (static_cast<uint64_t>(m.stats.solids) << 20) ^ m.stats.hazards ^ 0x5bd1e995ull : 0);
-        if (key == 0) return true;
-        if (cachedLayer == pl && cachedKey == key) return cachedResult;
-
-        if (m.levelHash != 0) {
-            cachedResult = NXR::Stats::fingerprint(pl) == m.levelHash;
-        } else {
-            const auto now = NXR::Stats::compute(pl);
-            const auto& was = m.stats;
-            cachedResult = now.objects == was.objects && now.solids == was.solids && now.hazards == was.hazards;
-        }
-        cachedLayer = pl;
-        cachedKey = key;
-        return cachedResult;
-    }
-
-    bool repairAllowed(PlayLayer* pl) {
-        if (!rescueEnabled()) return false;
-        auto& st = State::get();
-        if (st.current.noclip && !NXRConfig::get().get<bool>("nxr.player.noclip", false)) return false;
-        return levelMatchesMacro(pl);
-    }
-
     constexpr float kDriftEps = 0.002f;
     constexpr float kVelEps = 0.002f;
     constexpr float kRotEps = 1.f;
@@ -388,16 +353,15 @@ namespace {
             if (dual) syncGravity(layer->m_player2, row->p2);
         }
 
-        const bool repair = repairAllowed(PlayLayer::get());
         const bool off = force
-            || (repair && (drifted(layer->m_player1, row->p1, row->full)
-            || (dual && drifted(layer->m_player2, row->p2, row->full))));
+            || drifted(layer->m_player1, row->p1, row->full)
+            || (dual && drifted(layer->m_player2, row->p2, row->full));
 
         if (off) {
             restoreSuper(layer, m, frame, dual);
             Cap::writeState(layer->m_player1, row->p1, row->full, platformer);
             if (dual) Cap::writeState(layer->m_player2, row->p2, row->full, platformer);
-        } else if (repair) {
+        } else {
             if (rotationOff(layer->m_player1, row->p1)) layer->m_player1->setRotation(row->p1.rot);
             if (dual && rotationOff(layer->m_player2, row->p2)) layer->m_player2->setRotation(row->p2.rot);
         }
@@ -414,7 +378,8 @@ namespace {
 
     bool isDesyncDeath(PlayLayer* pl, GameObject* object) {
         auto& st = State::get();
-        if (st.mode != Mode::Playing || !repairAllowed(pl)) return false;
+        if (st.mode != Mode::Playing || !rescueEnabled()) return false;
+        if (st.current.noclip && !globalNoclipEnabled()) return false;
         if (!pl || pl->m_levelEndAnimationStarted) return false;
         if (object && object == pl->m_anticheatSpike) return false;
         if (st.current.frames.empty() || st.frame == 0) return false;
