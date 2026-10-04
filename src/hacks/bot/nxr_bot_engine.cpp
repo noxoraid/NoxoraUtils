@@ -89,7 +89,7 @@ namespace {
     }
 
     bool rescueEnabled() {
-        return NXRConfig::get().get<bool>("nxr.bot.desync_rescue", true);
+        return NXRConfig::get().get<bool>("nxr.bot.desync_rescue", false);
     }
 
     bool cbfBypassEnabled() {
@@ -353,15 +353,16 @@ namespace {
             if (dual) syncGravity(layer->m_player2, row->p2);
         }
 
+        const bool repair = rescueEnabled();
         const bool off = force
-            || drifted(layer->m_player1, row->p1, row->full)
-            || (dual && drifted(layer->m_player2, row->p2, row->full));
+            || (repair && (drifted(layer->m_player1, row->p1, row->full)
+            || (dual && drifted(layer->m_player2, row->p2, row->full))));
 
         if (off) {
             restoreSuper(layer, m, frame, dual);
             Cap::writeState(layer->m_player1, row->p1, row->full, platformer);
             if (dual) Cap::writeState(layer->m_player2, row->p2, row->full, platformer);
-        } else {
+        } else if (repair) {
             if (rotationOff(layer->m_player1, row->p1)) layer->m_player1->setRotation(row->p1.rot);
             if (dual && rotationOff(layer->m_player2, row->p2)) layer->m_player2->setRotation(row->p2.rot);
         }
