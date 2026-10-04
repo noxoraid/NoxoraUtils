@@ -681,7 +681,7 @@ $execute {
         popup->addConfigToggle("Fix Random", kFixRandomKey, true);
         popup->addConfigToggle("CBF Bypass", kCbfKey, true);
         popup->addConfigToggle("Playback Death", kPlaybackDeathKey, true);
-        popup->addConfigToggle("Desync Rescue", kDesyncRescueKey, false);
+        popup->addConfigToggle("Desync Rescue", kDesyncRescueKey, true);
         popup->addConfigToggle("Wave Trail Fix", "nxr.bot.wave_trail_fix", true);
     });
 

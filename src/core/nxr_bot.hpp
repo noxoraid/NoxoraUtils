@@ -83,6 +83,7 @@ namespace NXR::Bot {
         uint64_t totalFrames = 0;
         uint32_t layout = 0;
         bool noclip = false;
+        uint64_t levelHash = 0;
         bool hasStats = false;
         NXR::Stats::LevelStats stats;
         std::vector<InputEvent> events;
@@ -99,6 +100,7 @@ namespace NXR::Bot {
             totalFrames = 0;
             layout = 0;
             noclip = false;
+            levelHash = 0;
             hasStats = false;
             stats = {};
             events.clear();

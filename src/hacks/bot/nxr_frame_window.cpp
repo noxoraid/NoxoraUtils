@@ -3,9 +3,10 @@
 #include <Geode/modify/PlayLayer.hpp>
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <deque>
+#include <filesystem>
+#include <map>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -16,16 +17,16 @@
 #include "../../core/nxr_config.hpp"
 #include "../../core/nxr_practice_fix.hpp"
 #include "../../interface/cocos/nxr_hack_settings_popup.hpp"
-#include <filesystem>
 
 using namespace geode::prelude;
 
 NXR_HACK_CREATE(
     "Bot", "Frame Window Counter",
-    "Frame perfect counter. For every click it checks how many physics frames earlier or later the same click would still survive "
-    "(for example jumping over 3 spikes), shows the window as a marked area in the level with the size in frames and the lowest FPS "
-    "that can still hit it, and counts the clicks in a list on the left by needed FPS (20 FPS in white down to 240+ FPS in red). "
-    "Orb clicks use the time the orb is touched. A sound plays at every click. Counter and marks can be hidden separately",
+    "Frame perfect counter built from your own NXR macro and your own runs. Every click gets a frame window: how many physics frames "
+    "earlier or later the same click would still survive (for example jumping over 3 spikes), measured with the game's own physics. "
+    "A marker with the window and the lowest FPS that can hit it appears on the player at the click, a sound plays, and the label list "
+    "in the top left counts the clicks by needed FPS (20 FPS white down to 240+ FPS red). While a macro plays, windows come from the macro inputs; "
+    "results are kept per level so the next playback shows them instantly. Counter and markers can be hidden separately",
     false
 );
 
@@ -34,12 +35,11 @@ namespace {
     constexpr const char* kMarksKey = "nxr.bot.frame_window_counter::marks";
     constexpr const char* kSoundKey = "nxr.bot.frame_window_counter::sound";
     constexpr const char* kVolumeKey = "nxr.bot.frame_window_counter::sound_volume";
-    constexpr const char* kResetKey = "nxr.bot.frame_window_counter::reset_attempt";
     constexpr const char* kScaleKey = "nxr.bot.frame_window_counter::scale";
     constexpr const char* kPosYKey = "nxr.bot.frame_window_counter::pos_y";
     constexpr const char* kHorizonKey = "nxr.bot.frame_window_counter::horizon";
     constexpr const char* kMaxKey = "nxr.bot.frame_window_counter::max_window";
-    constexpr const char* kMarkTimeKey = "nxr.bot.frame_window_counter::mark_time";
+    constexpr const char* kMarkSizeKey = "nxr.bot.frame_window_counter::mark_size";
 
     constexpr int kRows = 8;
     constexpr size_t kRing = 512;
@@ -57,36 +57,46 @@ namespace {
         uint64_t tick = 0;
         uint64_t release = 0;
         uint64_t prevRelease = 0;
+        int64_t key = 0;
     };
 
     struct Job {
         uint64_t tick = 0;
         uint64_t release = 0;
         uint64_t prevRelease = 0;
+        int64_t key = 0;
         int window = 0;
         int horizon = 0;
         int phase = 0;
         int k = 0;
         int late = 0;
         int early = 0;
-        float y = 0.f;
+        CCPoint pos;
         std::vector<NXR::Practice::SavedPlayer> states;
         std::vector<char> holds;
-        std::vector<float> xs;
     };
 
     struct OrbTrack {
         int overlap = 0;
-        int clickAt = 0;
+        bool clicked = false;
         bool seen = false;
-        float x0 = 0.f;
-        float x1 = 0.f;
-        float y = 0.f;
+        CCPoint pos;
     };
 
-    struct Mark {
+    struct Result {
+        int ticks = 0;
+        bool capped = false;
+        CCPoint pos;
+    };
+
+    struct Marker {
         Ref<CCNode> node;
-        double expire = 0.0;
+        CCPoint world;
+    };
+
+    struct Row {
+        CCLabelBMFont* text = nullptr;
+        CCLabelBMFont* count = nullptr;
     };
 
     struct Sim {
@@ -102,15 +112,21 @@ namespace {
     std::deque<Pending> g_pending;
     std::deque<Job> g_jobs;
     std::unordered_map<const void*, OrbTrack> g_orbs;
-    std::vector<Mark> g_marks;
+    std::unordered_map<int, std::map<int64_t, Result>> g_store;
+    std::unordered_set<int64_t> g_shown;
+    std::vector<Marker> g_markers;
     std::array<int, kRows> g_counts{};
-    std::array<CCLabelBMFont*, kRows> g_rows{};
+    std::array<Row, kRows> g_rows{};
     Ref<CCNode> g_hud;
     Sim g_sim;
     uint64_t g_tick = 0;
     uint64_t g_lastRelease = 0;
     bool g_prevHold = false;
     bool g_hudDirty = true;
+    int g_levelId = 0;
+    int64_t g_lastKey = -1;
+    int g_pulse = -1;
+    NXR::Bot::Mode g_lastMode = NXR::Bot::Mode::Off;
     const void* g_layer = nullptr;
 
     NXR::Hack& hackRef() {
@@ -123,16 +139,15 @@ namespace {
     bool showMarks() { return NXRConfig::get().get<bool>(kMarksKey, true); }
     bool soundOn() { return NXRConfig::get().get<bool>(kSoundKey, true); }
 
-    double nowSeconds() {
-        using namespace std::chrono;
-        return duration<double>(steady_clock::now().time_since_epoch()).count();
+    float tps() { return std::max(1.f, NXR::Bot::effectiveTps()); }
+    int horizonTicks() { return std::clamp(NXRConfig::get().get<int>(kHorizonKey, 110), 40, 480); }
+    int maxWindow() { return std::clamp(NXRConfig::get().get<int>(kMaxKey, 32), 4, 64); }
+
+    int64_t keyNow(PlayLayer* pl) {
+        return static_cast<int64_t>(std::llround(pl->m_gameState.m_levelTime * static_cast<double>(tps())));
     }
 
-    float tps() { return std::max(1.f, NXR::Bot::effectiveTps()); }
-
-    int horizonTicks() { return std::clamp(NXRConfig::get().get<int>(kHorizonKey, 110), 40, 480); }
-
-    int maxWindow() { return std::clamp(NXRConfig::get().get<int>(kMaxKey, 32), 4, 64); }
+    std::map<int64_t, Result>& store() { return g_store[g_levelId]; }
 
     ccColor3B rowColor(int row) {
         static const ccColor3B colors[kRows] = {
@@ -142,7 +157,8 @@ namespace {
         return colors[std::clamp(row, 0, kRows - 1)];
     }
 
-    int rowForFps(float fps) {
+    int rowForTicks(int ticks) {
+        const float fps = tps() / static_cast<float>(std::max(1, ticks));
         for (int i = 0; i < kRows - 1; i++) {
             if (fps <= static_cast<float>(kFpsSteps[static_cast<size_t>(i)]) + 0.001f) return i;
         }
@@ -164,26 +180,26 @@ namespace {
         return path;
     }
 
-    void playSound() {
+    void playSound(int row) {
         if (!soundOn()) return;
         auto* engine = FMODAudioEngine::get();
         if (!engine) return;
         const float volume = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kVolumeKey, 80), 0, 100)) / 100.f;
-        engine->playEffect(clickSoundPath(), 1.f, 0.f, volume);
+        const float speed = 0.8f + 0.07f * static_cast<float>(std::clamp(row, 0, kRows - 1));
+        engine->playEffect(clickSoundPath(), speed, 0.f, volume);
     }
 
     void dropHud() {
         if (g_hud) g_hud->removeFromParent();
         g_hud = nullptr;
-        g_rows.fill(nullptr);
+        g_rows.fill(Row{});
         g_hudDirty = true;
     }
 
     void refreshHud() {
         for (int i = 0; i < kRows; i++) {
-            if (!g_rows[static_cast<size_t>(i)]) continue;
-            const std::string text = fmt::format("{}: {}", rowLabel(i), g_counts[static_cast<size_t>(i)]);
-            g_rows[static_cast<size_t>(i)]->setString(text.c_str());
+            auto& row = g_rows[static_cast<size_t>(i)];
+            if (row.count) row.count->setString(std::to_string(g_counts[static_cast<size_t>(i)]).c_str());
         }
     }
 
@@ -194,97 +210,163 @@ namespace {
 
         const CCSize win = CCDirector::sharedDirector()->getWinSize();
         const float scale = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kScaleKey, 100), 40, 250)) / 100.f;
-        const float posY = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kPosYKey, 62), 10, 95)) / 100.f;
-        const float step = 14.f * scale;
+        const float posY = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kPosYKey, 95), 10, 99)) / 100.f;
+        const float step = 18.f * scale;
 
         auto* root = CCNode::create();
-        root->setPosition(CCPoint(6.f, win.height * posY));
-        root->setZOrder(900);
+        root->setPosition(CCPoint(5.f, win.height * posY));
+        root->setZOrder(9999);
+
+        float maxText = 25.f;
         for (int i = 0; i < kRows; i++) {
-            auto* label = CCLabelBMFont::create("", "bigFont.fnt");
-            label->setAnchorPoint(CCPoint(0.f, 0.5f));
-            label->setScale(0.3f * scale);
-            label->setColor(rowColor(i));
-            label->setPosition(CCPoint(0.f, -step * static_cast<float>(i)));
-            label->setOpacity(225);
-            root->addChild(label);
-            g_rows[static_cast<size_t>(i)] = label;
+            auto* text = CCLabelBMFont::create((rowLabel(i) + ":").c_str(), "bigFont.fnt");
+            text->setAnchorPoint(CCPoint(0.f, 1.f));
+            text->setScale(0.45f * scale);
+            text->setColor(rowColor(i));
+            maxText = std::max(maxText, text->getScaledContentSize().width);
+            g_rows[static_cast<size_t>(i)].text = text;
+            root->addChild(text);
+        }
+        for (int i = 0; i < kRows; i++) {
+            auto& row = g_rows[static_cast<size_t>(i)];
+            row.text->setPosition(CCPoint(0.f, -step * static_cast<float>(i)));
+            auto* count = CCLabelBMFont::create("0", "bigFont.fnt");
+            count->setAnchorPoint(CCPoint(0.f, 1.f));
+            count->setScale(0.45f * scale);
+            count->setColor(rowColor(i));
+            count->setPosition(CCPoint(maxText + 4.f, -step * static_cast<float>(i)));
+            row.count = count;
+            root->addChild(count);
         }
         pl->m_uiLayer->addChild(root);
         g_hud = root;
         refreshHud();
     }
 
-    void clearMarks() {
-        for (auto& mark : g_marks) {
-            if (mark.node) mark.node->removeFromParent();
-        }
-        g_marks.clear();
+    void pulseRow(int row) {
+        if (row < 0 || row >= kRows) return;
+        auto* count = g_rows[static_cast<size_t>(row)].count;
+        if (!count) return;
+        const float scale = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kScaleKey, 100), 40, 250)) / 100.f;
+        const ccColor3B c = rowColor(row);
+        count->stopAllActions();
+        count->setScale(0.45f * scale);
+        count->setColor(c);
+        count->runAction(CCSequence::create(
+            CCEaseSineOut::create(CCScaleTo::create(0.06f, 0.58f * scale)),
+            CCEaseSineOut::create(CCScaleTo::create(0.2f, 0.45f * scale)),
+            nullptr
+        ));
+        count->runAction(CCSequence::create(
+            CCEaseSineOut::create(CCTintTo::create(0.06f, 255, 255, 255)),
+            CCEaseSineOut::create(CCTintTo::create(0.2f, c.r, c.g, c.b)),
+            nullptr
+        ));
     }
 
-    void clearRun() {
+    void clearMarkers() {
+        for (auto& marker : g_markers) {
+            if (marker.node) marker.node->removeFromParent();
+        }
+        g_markers.clear();
+    }
+
+    void spawnMarker(PlayLayer* pl, const Result& result, int row) {
+        if (!pl || !pl->m_uiLayer || !pl->m_objectLayer || !showMarks()) return;
+
+        auto* node = CCNode::create();
+        const ccColor3B c = rowColor(row);
+        const float size = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kMarkSizeKey, 100), 40, 250)) / 100.f;
+
+        auto* circle = CCDrawNode::create();
+        CCPoint verts[48];
+        const float radius = 13.f;
+        for (int i = 0; i < 48; i++) {
+            const float angle = static_cast<float>(i) * (3.14159265f * 2.f) / 48.f;
+            verts[i] = CCPoint(radius * std::cos(angle), radius * std::sin(angle));
+        }
+        circle->drawPolygon(verts, 48, ccc4f(0.f, 0.f, 0.f, 0.f), 4.f, ccc4f(0.f, 0.f, 0.f, 1.f));
+        circle->drawPolygon(verts, 48, ccc4f(0.f, 0.f, 0.f, 0.f), 2.f, ccc4f(c.r / 255.f, c.g / 255.f, c.b / 255.f, 1.f));
+        node->addChild(circle, 0);
+
+        const int need = static_cast<int>(std::ceil(tps() / static_cast<float>(std::max(1, result.ticks))));
+        auto* label = CCLabelBMFont::create(fmt::format("{}{}f ({}fps)", result.ticks, result.capped ? "+" : "", need).c_str(), "bigFont.fnt");
+        label->setAnchorPoint(CCPoint(1.f, 0.5f));
+        label->setPosition(CCPoint(-18.f, 0.f));
+        label->setScale(0.5f);
+        label->setColor(c);
+        node->addChild(label, 1);
+
+        node->setScale(std::abs(pl->m_objectLayer->getScaleY()) * size);
+        node->setPosition(pl->m_objectLayer->convertToWorldSpace(result.pos));
+        pl->m_uiLayer->addChild(node, 50);
+        g_markers.push_back({Ref<CCNode>(node), result.pos});
+    }
+
+    void updateMarkers(PlayLayer* pl) {
+        if (!pl || !pl->m_objectLayer) return;
+        const CCSize win = CCDirector::sharedDirector()->getWinSize();
+        const float layerScale = std::abs(pl->m_objectLayer->getScaleY());
+        const float size = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kMarkSizeKey, 100), 40, 250)) / 100.f;
+        constexpr float margin = 300.f;
+
+        for (auto it = g_markers.begin(); it != g_markers.end();) {
+            if (!it->node || !it->node->getParent()) {
+                it = g_markers.erase(it);
+                continue;
+            }
+            const CCPoint screen = pl->m_objectLayer->convertToWorldSpace(it->world);
+            it->node->setPosition(screen);
+            it->node->setScale(layerScale * size);
+            if (screen.x < -margin || screen.x > win.width + margin || screen.y < -margin || screen.y > win.height + margin) {
+                it->node->removeFromParent();
+                it = g_markers.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
+    void recount(int64_t upTo) {
+        g_counts.fill(0);
+        g_shown.clear();
+        for (auto& [key, result] : store()) {
+            if (key > upTo) break;
+            g_counts[static_cast<size_t>(rowForTicks(result.ticks))]++;
+            g_shown.insert(key);
+        }
+        g_hudDirty = true;
+    }
+
+    void showResult(PlayLayer* pl, int64_t key, const Result& result, bool sound) {
+        if (g_shown.contains(key)) return;
+        g_shown.insert(key);
+        const int row = rowForTicks(result.ticks);
+        g_counts[static_cast<size_t>(row)]++;
+        g_hudDirty = true;
+        g_pulse = row;
+        spawnMarker(pl, result, row);
+        if (sound) playSound(row);
+    }
+
+    void storeResult(PlayLayer* pl, int64_t key, int ticks, bool capped, const CCPoint& pos, bool sound) {
+        if (ticks < 1) return;
+        Result result;
+        result.ticks = ticks;
+        result.capped = capped;
+        result.pos = pos;
+        store()[key] = result;
+        showResult(pl, key, result, sound);
+    }
+
+    void resetAll() {
         g_pending.clear();
         g_jobs.clear();
         g_orbs.clear();
         for (auto& frame : g_ring) frame.used = false;
         g_prevHold = false;
         g_lastRelease = 0;
-    }
-
-    void clearCounts() {
-        g_counts.fill(0);
-        g_hudDirty = true;
-        refreshHud();
-    }
-
-    void emit(PlayLayer* pl, int ticks, float x0, float x1, float y, bool capped) {
-        if (ticks < 1) return;
-        const float fps = tps() / static_cast<float>(ticks);
-        const int row = rowForFps(fps);
-        g_counts[static_cast<size_t>(row)]++;
-        g_hudDirty = true;
-
-        if (!pl || !pl->m_objectLayer || !showMarks()) return;
-        const float a = std::min(x0, x1);
-        const float b = std::max(x0, x1);
-
-        auto* node = CCNode::create();
-        auto* draw = CCDrawNode::create();
-        const ccColor3B c = rowColor(row);
-        const ccColor4F fill = ccc4f(c.r / 255.f, c.g / 255.f, c.b / 255.f, 0.35f);
-        const ccColor4F edge = ccc4f(c.r / 255.f, c.g / 255.f, c.b / 255.f, 0.95f);
-        const float w = std::max(b - a, 2.f);
-        CCPoint rect[4] = {ccp(a, y - 18.f), ccp(a + w, y - 18.f), ccp(a + w, y + 18.f), ccp(a, y + 18.f)};
-        draw->drawPolygon(rect, 4, fill, 0.6f, edge);
-        node->addChild(draw);
-
-        const int need = static_cast<int>(std::ceil(fps));
-        auto* label = CCLabelBMFont::create(fmt::format("{}{}f | {}fps", ticks, capped ? "+" : "", need).c_str(), "bigFont.fnt");
-        label->setScale(0.3f);
-        label->setColor(c);
-        label->setPosition(CCPoint(a + w * 0.5f, y + 30.f));
-        node->addChild(label);
-
-        node->setZOrder(1800);
-        pl->m_objectLayer->addChild(node);
-        const float life = static_cast<float>(std::clamp(NXRConfig::get().get<int>(kMarkTimeKey, 3), 1, 20));
-        g_marks.push_back({Ref<CCNode>(node), nowSeconds() + static_cast<double>(life)});
-        if (g_marks.size() > 24) {
-            if (g_marks.front().node) g_marks.front().node->removeFromParent();
-            g_marks.erase(g_marks.begin());
-        }
-    }
-
-    void trimMarks() {
-        const double now = nowSeconds();
-        for (auto it = g_marks.begin(); it != g_marks.end();) {
-            if (now >= it->expire || !it->node) {
-                if (it->node) it->node->removeFromParent();
-                it = g_marks.erase(it);
-            } else {
-                ++it;
-            }
-        }
+        clearMarkers();
     }
 
     void clearCollisionLogs(PlayerObject* player) {
@@ -319,8 +401,8 @@ namespace {
         const int64_t end = job.release > 0 ? static_cast<int64_t>(job.release) : t + job.horizon + job.window;
         if (tau >= pressAt && tau < end) return true;
         if (tau >= t && tau < end) return false;
-        const int64_t index = tau - (t - job.window);
         if (job.holds.empty()) return false;
+        const int64_t index = tau - (t - job.window);
         const int64_t clamped = std::clamp<int64_t>(index, 0, static_cast<int64_t>(job.holds.size()) - 1);
         return job.holds[static_cast<size_t>(clamped)] != 0;
     }
@@ -366,17 +448,6 @@ namespace {
         return ok;
     }
 
-    void finishJob(PlayLayer* pl, Job& job) {
-        const int total = job.late + job.early + 1;
-        const bool capped = job.late >= job.window || job.early >= job.window;
-        const int64_t t = static_cast<int64_t>(job.tick);
-        auto xAt = [&](int k) {
-            const size_t idx = static_cast<size_t>(t + k - (t - job.window));
-            return idx < job.xs.size() ? job.xs[idx] : job.xs[static_cast<size_t>(job.window)];
-        };
-        emit(pl, total, xAt(-job.early), xAt(job.late), job.y, capped);
-    }
-
     void stepJob(PlayLayer* pl, Job& job) {
         if (job.phase == 0) {
             if (!survives(pl, job, 0)) {
@@ -389,7 +460,8 @@ namespace {
         }
 
         if (job.phase == 1) {
-            const int64_t holdLen = (job.release > 0 ? static_cast<int64_t>(job.release) : static_cast<int64_t>(job.tick) + job.horizon) - static_cast<int64_t>(job.tick);
+            const int64_t holdEnd = job.release > 0 ? static_cast<int64_t>(job.release) : static_cast<int64_t>(job.tick) + job.horizon;
+            const int64_t holdLen = holdEnd - static_cast<int64_t>(job.tick);
             if (job.k > job.window || job.k >= holdLen || !survives(pl, job, job.k)) {
                 job.late = job.k - 1;
                 job.phase = 2;
@@ -401,10 +473,13 @@ namespace {
         }
 
         if (job.phase == 2) {
-            const int64_t floorK = job.prevRelease > 0 ? static_cast<int64_t>(job.prevRelease) - static_cast<int64_t>(job.tick) + 1 : -static_cast<int64_t>(job.window);
+            const int64_t floorK = job.prevRelease > 0
+                ? static_cast<int64_t>(job.prevRelease) - static_cast<int64_t>(job.tick) + 1
+                : -static_cast<int64_t>(job.window);
             if (-job.k > job.window || job.k < floorK || !survives(pl, job, job.k)) {
                 job.early = -job.k - 1;
-                finishJob(pl, job);
+                const bool capped = job.late >= job.window || job.early >= job.window;
+                storeResult(pl, job.key, job.late + job.early + 1, capped, job.pos, false);
                 job.phase = 9;
                 return;
             }
@@ -433,7 +508,21 @@ namespace {
         return f.used && f.tick == tick ? &f : nullptr;
     }
 
-    void startJob(PlayLayer* pl, const Pending& click) {
+    bool collectStates(Job& job, uint64_t t, int window) {
+        for (int i = -window; i <= 0; i++) {
+            const int64_t tau = static_cast<int64_t>(t) + i;
+            if (tau < 0) return false;
+            auto* f = frameAt(static_cast<uint64_t>(tau));
+            if (!f) return false;
+            job.states.push_back(f->state);
+        }
+        auto* origin = frameAt(t);
+        if (!origin) return false;
+        job.pos = origin->state.position;
+        return true;
+    }
+
+    void startRecordedJob(const Pending& click) {
         const int horizon = horizonTicks();
         const int window = std::min(maxWindow(), horizon - 1);
         const uint64_t t = click.tick;
@@ -443,46 +532,94 @@ namespace {
         job.tick = t;
         job.release = click.release;
         job.prevRelease = click.prevRelease;
+        job.key = click.key;
         job.window = window;
         job.horizon = horizon;
 
+        if (!collectStates(job, t, window)) return;
+
         for (int i = -window; i <= horizon + window; i++) {
             const int64_t tau = static_cast<int64_t>(t) + i;
-            if (tau < 0) return;
             auto* f = frameAt(static_cast<uint64_t>(tau));
-            if (i <= window) {
-                if (!f) return;
-                job.states.push_back(f->state);
-                job.xs.push_back(f->state.position.x);
-            }
             if (f) job.holds.push_back(f->hold ? 1 : 0);
             else if (!job.holds.empty()) job.holds.push_back(job.holds.back());
             else return;
         }
-
-        auto* origin = frameAt(t);
-        if (!origin) return;
-        job.y = origin->state.position.y;
         g_jobs.push_back(std::move(job));
-        (void)pl;
+    }
+
+    bool startMacroJob(uint64_t t, int64_t key, uint64_t macroFrame) {
+        auto& st = NXR::Bot::State::get();
+        std::vector<std::pair<int64_t, bool>> toggles;
+        for (const auto& ev : st.current.events) {
+            if (ev.player() != 1 || ev.button() != 1) continue;
+            toggles.emplace_back(static_cast<int64_t>(ev.frame()), ev.down());
+        }
+        if (toggles.empty()) return false;
+
+        int64_t pressFrame = -1;
+        int64_t bestDist = 4;
+        for (const auto& [frame, down] : toggles) {
+            if (!down) continue;
+            const int64_t dist = std::llabs(frame - static_cast<int64_t>(macroFrame));
+            if (dist < bestDist) {
+                bestDist = dist;
+                pressFrame = frame;
+            }
+        }
+        if (pressFrame < 0) return false;
+
+        const int horizon = horizonTicks();
+        const int window = std::min(maxWindow(), horizon - 1);
+        if (t < static_cast<uint64_t>(window) + 1) return false;
+
+        Job job;
+        job.tick = t;
+        job.key = key;
+        job.window = window;
+        job.horizon = horizon;
+
+        int64_t nextUp = -1;
+        int64_t prevUp = -1;
+        for (const auto& [frame, down] : toggles) {
+            if (down) continue;
+            if (frame > pressFrame && (nextUp < 0 || frame < nextUp)) nextUp = frame;
+            if (frame < pressFrame && frame > prevUp) prevUp = frame;
+        }
+        if (nextUp > 0) job.release = static_cast<uint64_t>(static_cast<int64_t>(t) + (nextUp - pressFrame));
+        if (prevUp > 0 && static_cast<int64_t>(t) + (prevUp - pressFrame) > 0) {
+            job.prevRelease = static_cast<uint64_t>(static_cast<int64_t>(t) + (prevUp - pressFrame));
+        }
+
+        if (!collectStates(job, t, window)) return false;
+
+        auto holdAt = [&](int64_t frame) {
+            bool held = false;
+            for (const auto& [f, down] : toggles) {
+                if (f > frame) break;
+                held = down;
+            }
+            return held;
+        };
+        for (int i = -window; i <= horizon + window; i++) {
+            job.holds.push_back(holdAt(pressFrame + i) ? 1 : 0);
+        }
+        g_jobs.push_back(std::move(job));
+        return true;
     }
 
     void tickOrbs(PlayLayer* pl, PlayerObject* player, bool clicked) {
-        for (auto& [key, track] : g_orbs) track.seen = false;
+        for (auto& [obj, track] : g_orbs) track.seen = false;
 
         auto* rings = player ? player->m_touchingRings : nullptr;
         if (rings && rings->count() > 0 && !player->m_isDead) {
             for (auto* obj : CCArrayExt<GameObject*>(rings)) {
                 if (!obj) continue;
                 auto& track = g_orbs[obj];
-                if (track.overlap == 0) {
-                    track.x0 = player->getPositionX();
-                    track.y = obj->getPositionY();
-                }
+                if (track.overlap == 0) track.pos = obj->getPosition();
                 track.overlap++;
                 track.seen = true;
-                track.x1 = player->getPositionX();
-                if (clicked && track.clickAt == 0) track.clickAt = track.overlap;
+                if (clicked) track.clicked = true;
             }
         }
 
@@ -491,8 +628,9 @@ namespace {
                 ++it;
                 continue;
             }
-            if (it->second.clickAt > 0 && it->second.overlap > 0) {
-                emit(pl, it->second.overlap, it->second.x0, it->second.x1, it->second.y, false);
+            if (it->second.clicked && it->second.overlap > 0) {
+                const int64_t key = keyNow(pl);
+                storeResult(pl, key, it->second.overlap, false, it->second.pos, false);
             }
             it = g_orbs.erase(it);
         }
@@ -527,15 +665,33 @@ namespace {
         auto& f = g_ring[static_cast<size_t>(g_tick % kRing)];
         if (f.used && f.tick == g_tick) f.hold = holdNow;
 
-        if (holdNow && !g_prevHold) {
-            playSound();
+        const bool pressed = holdNow && !g_prevHold;
+        const int64_t key = keyNow(pl);
+
+        if (pressed) {
             auto* rings = player->m_touchingRings;
             const bool onOrb = rings && rings->count() > 0;
-            if (!onOrb) {
-                Pending click;
-                click.tick = g_tick;
-                click.prevRelease = g_lastRelease;
-                g_pending.push_back(click);
+            auto& known = store();
+            auto found = known.find(key);
+
+            if (found != known.end()) {
+                const int row = rowForTicks(found->second.ticks);
+                if (!g_shown.contains(key)) showResult(pl, key, found->second, true);
+                else playSound(row);
+            } else {
+                playSound(3);
+                if (!onOrb) {
+                    auto& st = NXR::Bot::State::get();
+                    bool queued = false;
+                    if (st.mode == NXR::Bot::Mode::Playing) queued = startMacroJob(g_tick, key, st.frame);
+                    if (!queued) {
+                        Pending click;
+                        click.tick = g_tick;
+                        click.prevRelease = g_lastRelease;
+                        click.key = key;
+                        g_pending.push_back(click);
+                    }
+                }
             }
         }
         if (!holdNow && g_prevHold) g_lastRelease = g_tick;
@@ -544,11 +700,11 @@ namespace {
             if (click.release == 0 && click.tick != g_tick && !holdNow) click.release = g_tick;
         }
 
-        tickOrbs(pl, player, holdNow && !g_prevHold);
+        tickOrbs(pl, player, pressed);
 
         const uint64_t horizon = static_cast<uint64_t>(horizonTicks());
         while (!g_pending.empty() && g_tick >= g_pending.front().tick + horizon) {
-            startJob(pl, g_pending.front());
+            startRecordedJob(g_pending.front());
             g_pending.pop_front();
         }
     }
@@ -568,17 +724,16 @@ class $modify(NXRFrameWindowGameLayer, GJBaseGameLayer) {
 
         hack.setForm([](NXR::Form& form) {
             form.addConfigToggle("Show Counter", kCounterKey, true);
-            form.addConfigToggle("Show Marks", kMarksKey, true);
+            form.addConfigToggle("Show Markers", kMarksKey, true);
             form.addConfigToggle("Click Sound", kSoundKey, true);
             form.addConfigSlider("Sound Volume", kVolumeKey, 0.f, 100.f, 80.f, 1.f, NXR::SliderScale::Linear, {{"25%", 25.f}, {"50%", 50.f}, {"80%", 80.f}, {"100%", 100.f}}, nullptr, true, "%");
             form.addSeparator();
             form.addConfigSlider("Check Length (ticks)", kHorizonKey, 40.f, 480.f, 110.f, 5.f, NXR::SliderScale::Linear, {{"60", 60.f}, {"110", 110.f}, {"200", 200.f}, {"300", 300.f}}, nullptr, true);
             form.addConfigSlider("Max Window (ticks)", kMaxKey, 4.f, 64.f, 32.f, 1.f, NXR::SliderScale::Linear, {{"16", 16.f}, {"32", 32.f}, {"64", 64.f}}, nullptr, true);
-            form.addConfigSlider("Mark Time (s)", kMarkTimeKey, 1.f, 20.f, 3.f, 1.f, NXR::SliderScale::Linear, {{"2", 2.f}, {"3", 3.f}, {"6", 6.f}}, nullptr, true);
             form.addSeparator();
-            form.addConfigToggle("Reset On New Attempt", kResetKey, false);
+            form.addConfigSlider("Marker Size", kMarkSizeKey, 40.f, 250.f, 100.f, 5.f, NXR::SliderScale::Linear, {{"70%", 70.f}, {"100%", 100.f}, {"150%", 150.f}}, nullptr, true, "%");
             form.addConfigSlider("Counter Size", kScaleKey, 40.f, 250.f, 100.f, 5.f, NXR::SliderScale::Linear, {{"70%", 70.f}, {"100%", 100.f}, {"150%", 150.f}}, [](float) { dropHud(); }, true, "%");
-            form.addConfigSlider("Counter Height", kPosYKey, 10.f, 95.f, 62.f, 1.f, NXR::SliderScale::Linear, {}, [](float) { dropHud(); }, true, "%");
+            form.addConfigSlider("Counter Height", kPosYKey, 10.f, 99.f, 95.f, 1.f, NXR::SliderScale::Linear, {}, [](float) { dropHud(); }, true, "%");
         });
     }
 
@@ -687,23 +842,34 @@ class $modify(NXRFrameWindowPlayLayer, PlayLayer) {
 
     void resetLevel() {
         PlayLayer::resetLevel();
-        clearRun();
-        clearMarks();
-        if (NXRConfig::get().get<bool>(kResetKey, false)) clearCounts();
+        resetAll();
+        recount(keyNow(this));
+        refreshHud();
     }
 
     void postUpdate(float dt) {
         PlayLayer::postUpdate(dt);
+
+        const int levelId = m_level ? static_cast<int>(m_level->m_levelID.value()) : 0;
         if (g_layer != this) {
             g_layer = this;
+            g_levelId = levelId;
             dropHud();
             dropFake();
-            clearRun();
-            clearMarks();
-            clearCounts();
+            resetAll();
+            recount(keyNow(this));
         }
 
-        trimMarks();
+        const auto mode = NXR::Bot::State::get().mode;
+        if (mode != g_lastMode) {
+            if (mode == NXR::Bot::Mode::Recording) {
+                g_store[g_levelId].clear();
+                recount(-1);
+            }
+            g_lastMode = mode;
+        }
+
+        updateMarkers(this);
         runJobs(this);
 
         if (!showCounter()) {
@@ -717,6 +883,10 @@ class $modify(NXRFrameWindowPlayLayer, PlayLayer) {
                 refreshHud();
                 g_hudDirty = false;
             }
+            if (g_pulse >= 0) {
+                pulseRow(g_pulse);
+                g_pulse = -1;
+            }
         }
     }
 
@@ -724,8 +894,7 @@ class $modify(NXRFrameWindowPlayLayer, PlayLayer) {
         g_layer = nullptr;
         dropHud();
         dropFake();
-        clearRun();
-        clearMarks();
+        resetAll();
         PlayLayer::onQuit();
     }
 };

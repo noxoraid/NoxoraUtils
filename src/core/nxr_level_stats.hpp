@@ -60,6 +60,7 @@ namespace NXR::Stats {
     Cat categorize(GameObject* object);
 
     LevelStats compute(PlayLayer* layer);
+    uint64_t fingerprint(PlayLayer* layer);
     void remember(const LevelStats& stats);
     bool cachedFor(int levelId, LevelStats& out);
     bool lastCached(LevelStats& out);
