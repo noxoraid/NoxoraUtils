@@ -467,7 +467,7 @@ namespace {
         (void)pl;
     }
 
-    void tickOrbs(PlayLayer* pl, PlayerObject* player) {
+    void tickOrbs(PlayLayer* pl, PlayerObject* player, bool clicked) {
         for (auto& [key, track] : g_orbs) track.seen = false;
 
         auto* rings = player ? player->m_touchingRings : nullptr;
@@ -482,7 +482,7 @@ namespace {
                 track.overlap++;
                 track.seen = true;
                 track.x1 = player->getPositionX();
-                if (obj->m_hasBeenActivated && track.clickAt == 0) track.clickAt = track.overlap;
+                if (clicked && track.clickAt == 0) track.clickAt = track.overlap;
             }
         }
 
@@ -544,7 +544,7 @@ namespace {
             if (click.release == 0 && click.tick != g_tick && !holdNow) click.release = g_tick;
         }
 
-        tickOrbs(pl, player);
+        tickOrbs(pl, player, holdNow && !g_prevHold);
 
         const uint64_t horizon = static_cast<uint64_t>(horizonTicks());
         while (!g_pending.empty() && g_tick >= g_pending.front().tick + horizon) {
