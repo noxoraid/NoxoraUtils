@@ -1,3 +1,14 @@
+# v1.4.24
+
+- **New:** the Recorder now records sound. Game audio (music and effects) is captured from the FMOD master output and encoded to AAC inside the same MP4 by MediaCodec. Because the game renders on a fixed step, the master pitch follows the real render speed while you record and the capture is resampled back to normal pitch, so the audio stays locked to the video when the phone lags. A drift check runs every frame and trims or pads tiny gaps. Audio is only captured while the game is running, pauses are cut out like the video.
+- **Fix:** notifications (Recording started, Saving video, bot messages and any other toast) and the NXR text labels and bot controls on the playfield are now hidden from the recorded frames while the level is running. They show again as soon as the game is paused or the recording stops.
+
+# v1.4.23
+
+- **New:** Recorder tab (Android). Start and Stop & Save record your gameplay to an MP4 with the phone hardware H.264 encoder (MediaCodec), no extra mod needed. The game is rendered on a fixed step (30, 60, 90 or 120 FPS) and every frame time comes from the frame number, so a phone that lags while recording still gives a smooth constant frame rate video at the right speed. Frames are read from the GPU in the background (double buffered PBO, with a safe fallback), converted and encoded on separate threads, then saved after you stop. Pauses are cut out of the video. The video has no sound yet.
+- **New:** Recorder settings: frame rate, bitrate, Auto Stop On Complete with seconds after the finish, and Hide Button While Recording. A keybind action "Recorder: Start / Stop" is available.
+- **Change:** Speedhack is ignored while a video is recording so the render step stays exact.
+
 # v1.4.22
 
 - **New:** Skip Orb (Utils). Choose which orbs you skip: yellow, pink/purple, blue, green, red, black, spider/custom, plus All Orbs and All Dash Orbs. Selected orbs and dashes are clicked for you while you play or record, the click is stored in the macro so playback taps them for real. Also skips portals (cube, ship, ball, UFO, wave, robot, spider, swing, gravity, size, dual/solo, mirror, speed, teleport, or All Portals): they are ignored and never change your gamemode. Player 1 and Player 2 can be toggled separately.

@@ -7,6 +7,7 @@
 #include <memory>
 #include "../../core/nxr_bot.hpp"
 #include "../../core/nxr_config.hpp"
+#include "../../core/nxr_render_keys.hpp"
 
 using namespace geode::prelude;
 
@@ -225,6 +226,7 @@ namespace {
         auto* menu = CCMenu::create();
         menu->setPosition({0.f, 0.f});
         menu->setZOrder(100);
+        menu->setID(NXR::Render::Keys::concealId);
 
         const float topY = win.height - 42.f;
         const float spacing = 78.f;

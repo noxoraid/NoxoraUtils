@@ -8,6 +8,7 @@
 #include <filesystem>
 #include "../../core/nxr_bot.hpp"
 #include "../../core/nxr_config.hpp"
+#include "../../core/nxr_render_keys.hpp"
 #include "../../core/nxr_utils.hpp"
 
 using namespace geode::prelude;
@@ -449,6 +450,7 @@ namespace {
         perfect.label->setScale(0.5f);
         perfect.label->setColor(perfectColor());
         perfect.label->setZOrder(1000);
+        perfect.label->setID(NXR::Render::Keys::concealId);
         perfect.born = now;
         perfect.x = mark.xs;
         perfect.y = (target ? target->getPositionY() : 100.f) + 52.f;
@@ -628,6 +630,7 @@ namespace {
         if (!g_hudStats || g_hudStats->getParent() != pl->m_uiLayer) {
             g_hudStats = CCLabelBMFont::create("0 / 0", "bigFont.fnt");
             g_hudStats->setScale(0.2f);
+            g_hudStats->setID(NXR::Render::Keys::concealId);
             pl->m_uiLayer->addChild(g_hudStats, 901);
             g_hudStatsText.clear();
         }
@@ -637,6 +640,7 @@ namespace {
         if (!g_hudInfo || g_hudInfo->getParent() != pl->m_uiLayer) {
             g_hudInfo = CCLabelBMFont::create("", "bigFont.fnt");
             g_hudInfo->setScale(0.2f);
+            g_hudInfo->setID(NXR::Render::Keys::concealId);
             g_hudInfo->setAnchorPoint({0.5f, 1.f});
             pl->m_uiLayer->addChild(g_hudInfo, 901);
             g_hudInfoText.clear();

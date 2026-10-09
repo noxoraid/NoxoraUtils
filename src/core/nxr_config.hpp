@@ -20,6 +20,13 @@ inline std::filesystem::path getFolderMacroPath() {
     return getFolderPath() / "nxr_macro";
 #endif
 }
+inline std::filesystem::path getFolderRenderPath() {
+#ifdef GEODE_IS_ANDROID
+    return std::filesystem::path("/storage/emulated/0/Android/media/com.geode.launcher/game/nxr_render");
+#else
+    return getFolderPath() / "nxr_render";
+#endif
+}
 inline std::filesystem::path getFolderPresetsPath() { return getFolderPath() / "Presets"; }
 inline std::filesystem::path getFolderShowcasesPath() { return getFolderPath() / "Showcases"; }
 inline std::filesystem::path getFileDataPath() { return getFolderPath() / "config3.json"; }

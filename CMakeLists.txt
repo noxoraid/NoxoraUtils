@@ -36,6 +36,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE libs)
 target_link_libraries(${PROJECT_NAME} imgui-cocos)
 
 if (ANDROID)
+    target_link_libraries(${PROJECT_NAME} mediandk)
     target_link_options(${PROJECT_NAME} PRIVATE "-Wl,-Bsymbolic")
 endif()
 

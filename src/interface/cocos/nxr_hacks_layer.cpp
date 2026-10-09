@@ -23,7 +23,7 @@ namespace {
 
     std::vector<NXR::Window*> orderedWindows() {
         auto& windows = NXR::Gui::get().getWindows();
-        static const char* preferred[] = {"Global", "Player", "Level", "Bot", "Utils", "Creator"};
+        static const char* preferred[] = {"Global", "Player", "Level", "Bot", "Recorder", "Utils", "Creator"};
         std::vector<NXR::Window*> out;
         for (const char* name : preferred) {
             for (auto& win : windows) {

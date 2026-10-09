@@ -5,6 +5,7 @@
 #include <cmath>
 #include "../../core/nxr_gui.hpp"
 #include "../../core/nxr_config.hpp"
+#include "../../core/nxr_render_session.hpp"
 #include "../../interface/cocos/nxr_hack_settings_popup.hpp"
 
 NXR_HACK_CREATE(
@@ -124,7 +125,7 @@ class $modify(NXRSpeedScheduler, cocos2d::CCScheduler) {
         g_realDt = dt;
 
         float scaled = dt;
-        if (speedOn() && gameplayActive()) {
+        if (speedOn() && gameplayActive() && !NXR::Render::GameplayVideoSession::get().isActive()) {
             scaled = static_cast<float>(static_cast<double>(dt) * speedValue());
         }
 
