@@ -1,3 +1,7 @@
+# v1.4.22
+
+- **New:** Skip Orb (Utils). Choose which orbs you skip: yellow, pink/purple, blue, green, red, black, spider/custom, plus All Orbs and All Dash Orbs. Selected orbs and dashes are clicked for you while you play or record, the click is stored in the macro so playback taps them for real. Also skips portals (cube, ship, ball, UFO, wave, robot, spider, swing, gravity, size, dual/solo, mirror, speed, teleport, or All Portals): they are ignored and never change your gamemode. Player 1 and Player 2 can be toggled separately.
+
 # v1.4.21
 
 - **Fix:** Frame Window Counter now scans the window one tick at a time and stops at the first tick that fails, so a gap in the survivable ticks can no longer inflate the window (the old binary search could jump over it).
