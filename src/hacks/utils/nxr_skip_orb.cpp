@@ -2,6 +2,7 @@
 #include <Geode/modify/GJBaseGameLayer.hpp>
 #include <Geode/modify/PlayLayer.hpp>
 #include <string>
+#include <unordered_set>
 #include <vector>
 #include "../../core/nxr_gui.hpp"
 #include "../../core/nxr_safe_hook.hpp"
@@ -11,8 +12,9 @@
 
 NXR_HACK_CREATE(
     "Utils", "Skip Orb",
-    "Pick which orbs, dashes and portals you skip. Selected orbs and dashes are clicked for you while you play or record, "
-    "the click is stored in the macro so playback taps them for real. Selected portals are ignored and never change your gamemode",
+    "Pick which orbs, dashes and portals you skip. No Touch: selected orbs and dashes are never touched while you play or record, "
+    "and in playback they pulse as if clicked. Auto Click: they are clicked for you and the click is stored in the macro. "
+    "Selected portals are ignored and never change your gamemode",
     true
 );
 
@@ -23,6 +25,8 @@ namespace {
     NXR::Orb::Tracker g_orbP2;
     NXR::Orb::Tracker g_dashP1;
     NXR::Orb::Tracker g_dashP2;
+    std::unordered_set<const void*> g_seenP1;
+    std::unordered_set<const void*> g_seenP2;
 
     constexpr const char* kPrefix = "nxr.utils.skip_orb::";
 
@@ -105,6 +109,14 @@ namespace {
         }
     }
 
+    int skipMode() {
+        return NXRConfig::get().get<int>("nxr.utils.skip_orb::mode", 0);
+    }
+
+    bool botPlaying() {
+        return NXR::Bot::State::get().mode == NXR::Bot::Mode::Playing;
+    }
+
     bool playerEnabled(bool p2) {
         return opt(p2 ? "p2" : "p1", true);
     }
@@ -116,8 +128,10 @@ class $modify(NXRSkipOrbGameLayer, GJBaseGameLayer) {
         NXR::trySetPriority(self, "GJBaseGameLayer::processCommands", -10);
         NXR::tryAddHook(self, hack, "GJBaseGameLayer::processCommands");
         NXR::tryAddHook(self, hack, "GJBaseGameLayer::canBeActivatedByPlayer");
+        NXR::tryAddHook(self, hack, "GJBaseGameLayer::playerTouchedRing");
 
         hack.setForm([
+            mode = hack.formatAdditionalSetting("mode"),
             p1 = hack.formatAdditionalSetting("p1"),
             p2 = hack.formatAdditionalSetting("p2"),
             allOrbs = hack.formatAdditionalSetting("all_orbs"),
@@ -148,6 +162,8 @@ class $modify(NXRSkipOrbGameLayer, GJBaseGameLayer) {
             teleport = hack.formatAdditionalSetting("teleport")
         ](NXR::Form& form) {
             auto* f = &form;
+            f->addConfigRadio("Orb / Dash Mode", mode, {{"No Touch", 0}, {"Auto Click", 1}}, 0);
+            f->addSeparator();
             f->addConfigToggle("Player 1", p1, true);
             f->addConfigToggle("Player 2", p2, true);
             f->addSeparator();
@@ -182,6 +198,21 @@ class $modify(NXRSkipOrbGameLayer, GJBaseGameLayer) {
         });
     }
 
+    void playerTouchedRing(PlayerObject* player, RingObject* object) {
+        auto* pl = PlayLayer::get();
+        if (object && pl && static_cast<GJBaseGameLayer*>(pl) == this && skipMode() == 0) {
+            const bool isP2 = player == m_player2 && player != m_player1;
+            if (playerEnabled(isP2) && (orbSelected(object) || dashSelected(object))) {
+                if (botPlaying()) {
+                    auto& seen = isP2 ? g_seenP2 : g_seenP1;
+                    if (seen.insert(object).second) object->spawnCircle();
+                }
+                return;
+            }
+        }
+        GJBaseGameLayer::playerTouchedRing(player, object);
+    }
+
     bool canBeActivatedByPlayer(PlayerObject* player, EffectGameObject* object) {
         auto* pl = PlayLayer::get();
         if (object && pl && static_cast<GJBaseGameLayer*>(pl) == this && portalSelected(object)) {
@@ -193,7 +224,7 @@ class $modify(NXRSkipOrbGameLayer, GJBaseGameLayer) {
 
     void processCommands(float dt, bool isHalfTick, bool isLastTick) {
         auto* pl = PlayLayer::get();
-        if (pl && static_cast<GJBaseGameLayer*>(pl) == this && !isHalfTick) {
+        if (pl && static_cast<GJBaseGameLayer*>(pl) == this && !isHalfTick && skipMode() == 1) {
             if (NXR::Orb::gameActive()) {
                 auto orbMatch = [](GameObject* obj) { return orbSelected(obj); };
                 auto dashMatch = [](GameObject* obj) { return dashSelected(obj); };
@@ -231,6 +262,8 @@ class $modify(NXRSkipOrbPlayLayer, PlayLayer) {
         g_orbP2.reset();
         g_dashP1.reset();
         g_dashP2.reset();
+        g_seenP1.clear();
+        g_seenP2.clear();
         PlayLayer::resetLevel();
     }
 };
