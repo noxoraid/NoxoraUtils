@@ -2,6 +2,7 @@
 #include <Geode/Geode.hpp>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
@@ -19,6 +20,13 @@ namespace NXR::Render {
     struct VideoSettings {
         int fps = 60;
         int bitrateMbps = 16;
+        int bitrateMode = 1;
+        bool profileHigh = true;
+        bool bt709 = true;
+        bool fullRange = false;
+        int encoder = 0;
+        bool audio = true;
+        int audioOffsetMs = 0;
     };
 
     class GameplayVideoSession {
@@ -30,7 +38,8 @@ namespace NXR::Render {
         void finish();
         void armTail(int frames);
         void captureFromBackBuffer();
-        void tickAudioGate();
+        void syncRecordingClock();
+        bool usesFixedStep() const { return isAdvancing(); }
 
         bool isActive() const { return m_active.load(); }
         bool isAdvancing() const;
@@ -42,7 +51,7 @@ namespace NXR::Render {
 
         void encodeLoop();
         void flipRows(std::vector<uint8_t>& pixels) const;
-        void enqueue(std::vector<uint8_t>&& pixels);
+        void enqueue(std::vector<uint8_t>&& pixels, int64_t ptsUs);
         void recycle(std::vector<uint8_t>&& pixels);
         void joinFinalizer();
         std::vector<uint8_t> takeSpareBuffer();
@@ -61,7 +70,11 @@ namespace NXR::Render {
         std::mutex m_queueMutex;
         std::condition_variable m_frameReady;
         std::condition_variable m_spaceFreed;
-        std::deque<std::vector<uint8_t>> m_pending;
+        struct QueuedFrame {
+            std::vector<uint8_t> pixels;
+            int64_t ptsUs = 0;
+        };
+        std::deque<QueuedFrame> m_pending;
         bool m_closing = false;
         std::atomic<bool> m_audioActive { false };
         std::vector<float> m_audioScratch;
@@ -72,5 +85,13 @@ namespace NXR::Render {
         uint64_t m_framesQueued = 0;
         int m_tailFrames = 0;
         bool m_tailArmed = false;
+
+        uint64_t m_steps = 0;
+
+        // Frame pacing: keeps the on-screen slow motion even instead of stuttering.
+        void paceFrame();
+        std::chrono::steady_clock::time_point m_paceMark;
+        double m_costEma = 0.0;
+        bool m_paceValid = false;
     };
 }

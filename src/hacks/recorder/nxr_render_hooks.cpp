@@ -76,7 +76,7 @@ namespace {
 class $modify(NXRRenderStepScheduler, cocos2d::CCScheduler) {
     void update(float dt) {
         auto& session = NXR::Render::GameplayVideoSession::get();
-        if (session.isAdvancing()) dt = session.stepSeconds();
+        if (session.usesFixedStep()) dt = session.stepSeconds();
         CCScheduler::update(dt);
     }
 };
@@ -92,7 +92,7 @@ class $modify(NXRRenderDirector, cocos2d::CCDirector) {
     void drawScene() {
         auto& session = NXR::Render::GameplayVideoSession::get();
         const bool advancing = session.isAdvancing();
-        session.tickAudioGate();
+        session.syncRecordingClock();
         applyButtonVisibility(advancing && recorderHackEnabled(NXR::Render::Keys::hideButtonHack));
         if (advancing) concealForRecording();
         CCDirector::drawScene();

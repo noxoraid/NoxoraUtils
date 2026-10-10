@@ -1,7 +1,8 @@
 #pragma once
 #include <atomic>
-#include <chrono>
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <vector>
 
 namespace NXR::Render {
@@ -10,19 +11,23 @@ namespace NXR::Render {
         static AudioTap& get();
 
         int probeSampleRate();
-        bool attach();
+        bool attach(int offsetMs);
         void detach();
         void setGate(bool open);
-        void onVideoFrame(uint64_t framesQueued, int fps);
-        void collect(uint64_t frameIndex, int fps, std::vector<float>& out);
+        void collect(int64_t targetUs, std::vector<float>& out);
         void feed(const float* input, unsigned frames, int channels);
+
+        // Lockstep: the FMOD mixer may only produce as many samples as the game has
+        // rendered video frames for, so audio length always equals video length.
+        void grantFrame(uint64_t stepIndex, int fps);
+        // Called on the FMOD mixer thread. Blocks until enough credit exists, records the
+        // block and returns true when the speaker output must be muted.
+        bool process(const float* input, unsigned frames, int channels);
 
     private:
         AudioTap() = default;
 
-        void applyPitch(float pitch);
-        void resetCounters();
-        size_t available() const;
+        void resetCounters(int offsetMs);
 
         static constexpr size_t kRingFrames = size_t(1) << 18;
 
@@ -32,19 +37,15 @@ namespace NXR::Render {
         std::atomic<size_t> m_head { 0 };
         std::atomic<size_t> m_tail { 0 };
         std::atomic<bool> m_gate { false };
-        std::atomic<float> m_pitch { 1.f };
-        std::atomic<uint64_t> m_produced { 0 };
-        std::atomic<uint64_t> m_padded { 0 };
 
-        double m_phase = 0.0;
-        float m_prevLeft = 0.f;
-        float m_prevRight = 0.f;
-        bool m_primed = false;
+        std::mutex m_creditMutex;
+        std::condition_variable m_creditCv;
+        int64_t m_credit = 0;
+        uint64_t m_granted = 0;
 
         uint64_t m_written = 0;
-
-        double m_speed = 1.0;
-        bool m_haveLast = false;
-        std::chrono::steady_clock::time_point m_last;
+        int64_t m_shiftFrames = 0;
+        bool m_shiftApplied = false;
+        uint64_t m_discardPending = 0;
     };
 }

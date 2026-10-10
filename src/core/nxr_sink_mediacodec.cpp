@@ -22,6 +22,38 @@ namespace {
         return static_cast<uint8_t>(std::clamp(value, 0, 255));
     }
 
+    // Integer RGB -> YCbCr coefficients (16 bit fixed point) for the chosen matrix and range.
+    struct ColorMatrix {
+        int yr = 0, yg = 0, yb = 0;
+        int cbr = 0, cbg = 0, cbb = 0;
+        int crr = 0, crg = 0, crb = 0;
+        int yOffset = 16;
+    };
+
+    ColorMatrix buildColorMatrix(bool bt709, bool fullRange) {
+        const double kr = bt709 ? 0.2126 : 0.299;
+        const double kb = bt709 ? 0.0722 : 0.114;
+        const double kg = 1.0 - kr - kb;
+        const double yScale = fullRange ? 1.0 : 219.0 / 255.0;
+        const double cScale = fullRange ? 1.0 : 224.0 / 255.0;
+        const double cbDiv = 2.0 * (1.0 - kb);
+        const double crDiv = 2.0 * (1.0 - kr);
+        auto fixed = [](double value) { return static_cast<int>(std::lround(value * 65536.0)); };
+
+        ColorMatrix m;
+        m.yr = fixed(kr * yScale);
+        m.yg = fixed(kg * yScale);
+        m.yb = fixed(kb * yScale);
+        m.cbr = fixed(-kr / cbDiv * cScale);
+        m.cbg = fixed(-kg / cbDiv * cScale);
+        m.cbb = fixed(0.5 * cScale);
+        m.crr = fixed(0.5 * cScale);
+        m.crg = fixed(-kg / crDiv * cScale);
+        m.crb = fixed(-kb / crDiv * cScale);
+        m.yOffset = fullRange ? 0 : 16;
+        return m;
+    }
+
     class MediaCodecSink final : public NXR::Render::VideoSink {
     public:
         ~MediaCodecSink() override { close(); }
@@ -38,22 +70,41 @@ namespace {
             m_muxer = AMediaMuxer_new(m_fileDescriptor, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
             if (!m_muxer) return failOpen("Cannot create the MP4 muxer");
 
-            m_codec = AMediaCodec_createEncoderByType("video/avc");
-            if (!m_codec) return failOpen("No H.264 hardware encoder on this device");
+            m_matrix = buildColorMatrix(config.bt709, config.fullRange);
 
-            AMediaFormat* format = AMediaFormat_new();
-            AMediaFormat_setString(format, "mime", "video/avc");
-            AMediaFormat_setInt32(format, "width", m_width);
-            AMediaFormat_setInt32(format, "height", m_height);
-            AMediaFormat_setInt32(format, "bitrate", config.bitrateMbps * 1000000);
-            AMediaFormat_setInt32(format, "bitrate-mode", kBitrateModeVariable);
-            AMediaFormat_setInt32(format, "frame-rate", m_fps);
-            AMediaFormat_setInt32(format, "color-format", kColorFormatSemiPlanar);
-            AMediaFormat_setInt32(format, "i-frame-interval", 1);
+            // Tries the requested format first. If the device rejects the High profile it
+            // is retried once with the device default, so recording never fails because of it.
+            bool configured = false;
+            for (int attempt = 0; attempt < 2 && !configured; ++attempt) {
+                const bool withProfile = config.profileHigh && attempt == 0;
+                if (attempt == 1 && !config.profileHigh) break;
 
-            const media_status_t configured = AMediaCodec_configure(m_codec, format, nullptr, nullptr, AMEDIACODEC_CONFIGURE_FLAG_ENCODE);
-            AMediaFormat_delete(format);
-            if (configured != AMEDIA_OK) return failOpen("The encoder rejected this resolution or bitrate");
+                m_codec = AMediaCodec_createEncoderByType("video/avc");
+                if (!m_codec) return failOpen("No H.264 hardware encoder on this device");
+
+                AMediaFormat* format = AMediaFormat_new();
+                AMediaFormat_setString(format, "mime", "video/avc");
+                AMediaFormat_setInt32(format, "width", m_width);
+                AMediaFormat_setInt32(format, "height", m_height);
+                AMediaFormat_setInt32(format, "bitrate", config.bitrateMbps * 1000000);
+                AMediaFormat_setInt32(format, "bitrate-mode", config.bitrateMode == 2 ? 2 : kBitrateModeVariable);
+                AMediaFormat_setInt32(format, "frame-rate", m_fps);
+                AMediaFormat_setInt32(format, "color-format", kColorFormatSemiPlanar);
+                AMediaFormat_setInt32(format, "i-frame-interval", 1);
+                // Tell players which matrix and range the pixels use, so colors match the game.
+                AMediaFormat_setInt32(format, "color-standard", config.bt709 ? 1 : 4);
+                AMediaFormat_setInt32(format, "color-range", config.fullRange ? 1 : 2);
+                AMediaFormat_setInt32(format, "color-transfer", 3);
+                if (withProfile) AMediaFormat_setInt32(format, "profile", 8);
+
+                configured = AMediaCodec_configure(m_codec, format, nullptr, nullptr, AMEDIACODEC_CONFIGURE_FLAG_ENCODE) == AMEDIA_OK;
+                AMediaFormat_delete(format);
+                if (!configured) {
+                    AMediaCodec_delete(m_codec);
+                    m_codec = nullptr;
+                }
+            }
+            if (!configured) return failOpen("The encoder rejected this resolution or bitrate");
             if (AMediaCodec_start(m_codec) != AMEDIA_OK) return failOpen("The encoder did not start");
 
             m_stride = m_width;
@@ -69,7 +120,7 @@ namespace {
             }
 
             m_yuv.assign(static_cast<size_t>(m_stride) * m_sliceHeight * 3 / 2, 0);
-            m_frameIndex = 0;
+            m_lastPtsUs = -1;
 
             if (m_audioRate > 0 && !openAudio()) m_audioRate = 0;
             return geode::Ok();
@@ -110,7 +161,7 @@ namespace {
             }
         }
 
-        void write(const std::vector<uint8_t>& topDownRgba) override {
+        void write(const std::vector<uint8_t>& topDownRgba, int64_t ptsUs) override {
             if (!m_codec) return;
 
             convertToSemiPlanar(topDownRgba);
@@ -122,9 +173,9 @@ namespace {
                     uint8_t* target = AMediaCodec_getInputBuffer(m_codec, static_cast<size_t>(slot), &capacity);
                     const size_t bytes = std::min(capacity, m_yuv.size());
                     if (target) std::memcpy(target, m_yuv.data(), bytes);
-                    const int64_t timestampUs = m_frameIndex * 1000000LL / m_fps;
+                    const int64_t timestampUs = std::max(ptsUs, m_lastPtsUs + 1);
                     AMediaCodec_queueInputBuffer(m_codec, static_cast<size_t>(slot), 0, bytes, static_cast<uint64_t>(timestampUs), 0);
-                    ++m_frameIndex;
+                    m_lastPtsUs = timestampUs;
                     drainEncoded(m_codec, m_videoTrack, false);
                     return;
                 }
@@ -134,7 +185,7 @@ namespace {
 
         void close() override {
             if (m_codec) {
-                const int64_t endUs = m_frameIndex * 1000000LL / m_fps;
+                const int64_t endUs = std::max<int64_t>(m_lastPtsUs, 0) + 1000000LL / m_fps;
                 signalEndOfStream(m_codec, m_videoTrack, endUs);
             }
             if (m_audioCodec) {
@@ -287,17 +338,17 @@ namespace {
                     lumaLower[column] = lumaOf(c);
                     lumaLower[column + 1] = lumaOf(d);
 
-                    const int red = (a[0] + b[0] + c[0] + d[0]) >> 2;
-                    const int green = (a[1] + b[1] + c[1] + d[1]) >> 2;
-                    const int blue = (a[2] + b[2] + c[2] + d[2]) >> 2;
-                    chromaRow[column] = clampByte(((-38 * red - 74 * green + 112 * blue + 128) >> 8) + 128);
-                    chromaRow[column + 1] = clampByte(((112 * red - 94 * green - 18 * blue + 128) >> 8) + 128);
+                    const int red = (a[0] + b[0] + c[0] + d[0] + 2) >> 2;
+                    const int green = (a[1] + b[1] + c[1] + d[1] + 2) >> 2;
+                    const int blue = (a[2] + b[2] + c[2] + d[2] + 2) >> 2;
+                    chromaRow[column] = clampByte(((m_matrix.cbr * red + m_matrix.cbg * green + m_matrix.cbb * blue + 32768) >> 16) + 128);
+                    chromaRow[column + 1] = clampByte(((m_matrix.crr * red + m_matrix.crg * green + m_matrix.crb * blue + 32768) >> 16) + 128);
                 }
             }
         }
 
-        static uint8_t lumaOf(const uint8_t* pixel) {
-            return clampByte(((66 * pixel[0] + 129 * pixel[1] + 25 * pixel[2] + 128) >> 8) + 16);
+        uint8_t lumaOf(const uint8_t* pixel) const {
+            return clampByte(((m_matrix.yr * pixel[0] + m_matrix.yg * pixel[1] + m_matrix.yb * pixel[2] + 32768) >> 16) + m_matrix.yOffset);
         }
 
         void convertToSemiPlanar(const std::vector<uint8_t>& rgba) {
@@ -322,6 +373,7 @@ namespace {
             std::vector<uint8_t> data;
         };
 
+        ColorMatrix m_matrix;
         AMediaCodec* m_codec = nullptr;
         AMediaCodec* m_audioCodec = nullptr;
         AMediaMuxer* m_muxer = nullptr;
@@ -337,7 +389,7 @@ namespace {
         int m_fps = 60;
         int m_stride = 0;
         int m_sliceHeight = 0;
-        int64_t m_frameIndex = 0;
+        int64_t m_lastPtsUs = -1;
         std::vector<uint8_t> m_yuv;
     };
 }

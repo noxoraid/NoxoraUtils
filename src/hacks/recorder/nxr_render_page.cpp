@@ -19,7 +19,14 @@ namespace {
         auto& config = NXRConfig::get();
         NXR::Render::VideoSettings settings;
         settings.fps = kFrameRates[std::clamp(config.get<int>(NXR::Render::Keys::frameRate, 1), 0, 3)];
-        settings.bitrateMbps = std::clamp(config.get<int>(NXR::Render::Keys::bitrate, 16), 2, 80);
+        settings.bitrateMbps = std::clamp(config.get<int>(NXR::Render::Keys::bitrate, 16), 2, 120);
+        settings.bitrateMode = std::clamp(config.get<int>(NXR::Render::Keys::bitrateMode, 0), 0, 1) == 1 ? 2 : 1;
+        settings.profileHigh = config.get<int>(NXR::Render::Keys::profile, 1) == 1;
+        settings.bt709 = config.get<int>(NXR::Render::Keys::colorMatrix, 0) == 0;
+        settings.fullRange = config.get<int>(NXR::Render::Keys::colorRange, 0) == 1;
+        settings.encoder = std::clamp(config.get<int>(NXR::Render::Keys::encoder, 0), 0, 5);
+        settings.audio = config.get<bool>(NXR::Render::Keys::audioEnabled, true);
+        settings.audioOffsetMs = std::clamp(config.get<int>(NXR::Render::Keys::audioOffset, 0), -300, 300);
         return settings;
     }
 
@@ -82,10 +89,27 @@ $execute {
         page.addSection("Quality");
         page.addConfigChoice("Frame Rate", NXR::Render::Keys::frameRate, {"30 FPS", "60 FPS", "90 FPS", "120 FPS"}, 1);
         page.addConfigSlider(
-            "Bitrate", NXR::Render::Keys::bitrate, 2.f, 80.f, 16.f, 1.f, NXR::SliderScale::Linear,
-            {{"8", 8.f}, {"16", 16.f}, {"32", 32.f}, {"60", 60.f}},
+            "Bitrate", NXR::Render::Keys::bitrate, 2.f, 120.f, 16.f, 1.f, NXR::SliderScale::Linear,
+            {{"8", 8.f}, {"16", 16.f}, {"32", 32.f}, {"60", 60.f}, {"100", 100.f}},
             nullptr, true, " Mbps"
         );
+        page.addConfigChoice("Bitrate Mode", NXR::Render::Keys::bitrateMode, {"Variable (VBR)", "Constant (CBR)"}, 0);
+#ifndef GEODE_IS_ANDROID
+        page.addConfigChoice("Encoder", NXR::Render::Keys::encoder, {"Auto", "CPU (x264)", "NVIDIA", "AMD", "Intel", "Apple"}, 0);
+#endif
+        page.addConfigChoice("H.264 Profile", NXR::Render::Keys::profile, {"Device default", "High"}, 1);
+        page.addConfigChoice("Color Matrix", NXR::Render::Keys::colorMatrix, {"BT.709 (HD)", "BT.601 (SD)"}, 0);
+        page.addConfigChoice("Color Range", NXR::Render::Keys::colorRange, {"Limited (TV)", "Full (PC)"}, 0);
+        page.addText("Defaults (BT.709, Limited, High) match what players expect for HD video, so colors stay the same as in the game. If you change Color Matrix or Range, the video is tagged to match. A bitrate above what your phone's encoder supports makes recording fail to start; lower it if that happens.");
+        page.addSection("Audio");
+        page.addConfigToggle("Record Audio", NXR::Render::Keys::audioEnabled, true);
+        page.addText("The game is rendered one step per video frame, so the saved video stays smooth even when the phone lags. The sound is recorded in lockstep with it (music and clicks stay in sync), and the phone speaker is muted while recording.");
+        page.addConfigSlider(
+            "Audio Offset", NXR::Render::Keys::audioOffset, -300.f, 300.f, 0.f, 1.f, NXR::SliderScale::Linear,
+            {{"-100", -100.f}, {"0", 0.f}, {"100", 100.f}},
+            nullptr, true, " ms"
+        );
+        page.addText("Negative moves the sound earlier, positive moves it later.");
         page.addText(fmt::format("Videos are saved to {}", getFolderRenderPath().string()));
     });
 

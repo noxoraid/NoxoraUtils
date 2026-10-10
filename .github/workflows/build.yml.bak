@@ -15,10 +15,6 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - name: Windows
-            os: windows-latest
-          - name: macOS
-            os: macos-latest
           - name: Android64
             os: ubuntu-latest
             target: Android64

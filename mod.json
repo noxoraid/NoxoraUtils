@@ -7,7 +7,7 @@
 	},
 	"id": "noxorautils.nxr",
 	"name": "NoxoraUtils",
-	"version": "v1.4.24",
+	"version": "v1.4.25",
 	"developer": "Noxora",
 	"description": "Feature-rich mod menu (Windows, macOS, Android)  with a macro bot, noclip, hitboxes, trajectory and editor tools.",
 	"links": {
@@ -21,12 +21,21 @@
 		"interface",
 		"offline"
 	],
+	"settings": {
+		"ffmpeg-path": {
+			"type": "string",
+			"name": "FFmpeg Path (Windows / macOS)",
+			"description": "Optional. Full path to your own ffmpeg. Leave empty to use the one bundled with the mod.",
+			"default": ""
+		}
+	},
 	"resources": {
 		"sprites": [
 			"res/*.png"
 		],
 		"files": [
 			"res/click_indicator.mp3",
+			"res/ffmpeg*",
 			"changelog.md",
 			"res/GoogleSans-Regular.ttf"
 		],

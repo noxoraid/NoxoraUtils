@@ -1,5 +1,6 @@
 #include "nxr_render_session.hpp"
 #include <chrono>
+#include <thread>
 #include <cctype>
 #include <ctime>
 #include <string>
@@ -7,7 +8,7 @@
 #include "nxr_render_keys.hpp"
 
 namespace {
-    constexpr size_t kMaxPendingFrames = 4;
+    constexpr size_t kMaxPendingFrames = 8;
     constexpr size_t kMaxSpareFrames = 6;
 
     std::string safeLevelName() {
@@ -85,10 +86,15 @@ namespace NXR::Render {
         sinkConfig.height = height;
         sinkConfig.fps = settings.fps;
         sinkConfig.bitrateMbps = settings.bitrateMbps;
-        sinkConfig.audioSampleRate = AudioTap::get().probeSampleRate();
+        sinkConfig.bitrateMode = settings.bitrateMode;
+        sinkConfig.profileHigh = settings.profileHigh;
+        sinkConfig.bt709 = settings.bt709;
+        sinkConfig.fullRange = settings.fullRange;
+        sinkConfig.encoder = settings.encoder;
+        sinkConfig.audioSampleRate = settings.audio ? AudioTap::get().probeSampleRate() : 0;
 
-        auto started = makeMediaCodecSink();
-        if (!started) return geode::Err("Video recording is only available on Android");
+        auto started = makeVideoSink();
+        if (!started) return geode::Err("Video recording is not available on this platform");
 
         auto opened = started->open(sinkConfig);
         if (opened.isErr()) return geode::Err(opened.unwrapErr());
@@ -104,7 +110,10 @@ namespace NXR::Render {
         m_pending.clear();
         m_closing = false;
         m_readback.prepare(width, height);
-        m_audioActive = sinkConfig.audioSampleRate > 0 && AudioTap::get().attach();
+        m_steps = 0;
+        m_costEma = 1.0 / std::max(settings.fps, 1);
+        m_paceValid = false;
+        m_audioActive = sinkConfig.audioSampleRate > 0 && AudioTap::get().attach(settings.audioOffsetMs);
         m_encodeThread = std::thread([this] { encodeLoop(); });
         m_active.store(true);
         return geode::Ok(outputPath);
@@ -115,8 +124,35 @@ namespace NXR::Render {
         m_tailArmed = true;
     }
 
+    void GameplayVideoSession::syncRecordingClock() {
+        const bool advancing = isAdvancing();
+        if (!advancing) m_paceValid = false;
+        if (!m_audioActive) return;
+        AudioTap::get().setGate(advancing);
+    }
+
+    void GameplayVideoSession::paceFrame() {
+        using Clock = std::chrono::steady_clock;
+        const auto now = Clock::now();
+        if (m_paceValid) {
+            const double work = std::min(std::chrono::duration<double>(now - m_paceMark).count(), 0.25);
+            m_costEma = m_costEma * 0.92 + work * 0.08;
+            // Never faster than real time, never faster than the recent average cost, so
+            // a slow phone shows an even slow motion instead of fast and slow bursts.
+            const double target = std::max(m_costEma * 1.1, 1.0 / frameRate());
+            if (work < target) std::this_thread::sleep_for(std::chrono::duration<double>(std::min(target - work, 0.05)));
+        }
+        m_paceMark = Clock::now();
+        m_paceValid = true;
+    }
+
     void GameplayVideoSession::captureFromBackBuffer() {
         if (!isAdvancing()) return;
+
+        // Always one video frame per game step, however slow the phone is. The audio mixer
+        // is only allowed to produce this step's share of samples, which keeps both in sync.
+        const uint64_t step = m_steps++;
+        if (m_audioActive) AudioTap::get().grantFrame(step, frameRate());
 
         auto pixels = takeSpareBuffer();
         if (!m_readback.capture(pixels)) {
@@ -124,18 +160,14 @@ namespace NXR::Render {
             return;
         }
 
-        enqueue(std::move(pixels));
+        enqueue(std::move(pixels), static_cast<int64_t>(m_framesQueued * 1000000ULL / static_cast<uint64_t>(frameRate())));
         ++m_framesQueued;
-        if (m_audioActive) AudioTap::get().onVideoFrame(m_framesQueued, m_settings.fps);
 
-        if (!m_tailArmed) return;
-        if (--m_tailFrames > 0) return;
-        finish();
-    }
-
-    void GameplayVideoSession::tickAudioGate() {
-        if (!m_audioActive) return;
-        AudioTap::get().setGate(isAdvancing());
+        if (m_tailArmed && --m_tailFrames <= 0) {
+            finish();
+            return;
+        }
+        paceFrame();
     }
 
     void GameplayVideoSession::finish() {
@@ -144,7 +176,8 @@ namespace NXR::Render {
 
         auto lastFrame = takeSpareBuffer();
         if (m_readback.drain(lastFrame)) {
-            enqueue(std::move(lastFrame));
+            const int64_t lastPts = static_cast<int64_t>(m_framesQueued * 1000000ULL / static_cast<uint64_t>(frameRate()));
+            enqueue(std::move(lastFrame), lastPts);
             ++m_framesQueued;
         } else {
             recycle(std::move(lastFrame));
@@ -181,28 +214,28 @@ namespace NXR::Render {
     }
 
     void GameplayVideoSession::encodeLoop() {
-        uint64_t frameIndex = 0;
+        uint64_t framesWritten = 0;
         for (;;) {
-            std::vector<uint8_t> frame;
+            QueuedFrame queued;
             {
                 std::unique_lock lock(m_queueMutex);
                 m_frameReady.wait(lock, [this] { return !m_pending.empty() || m_closing; });
                 if (m_pending.empty()) return;
-                frame = std::move(m_pending.front());
+                queued = std::move(m_pending.front());
                 m_pending.pop_front();
             }
             m_spaceFreed.notify_one();
 
-            flipRows(frame);
-            m_encoder->write(frame);
-            recycle(std::move(frame));
+            flipRows(queued.pixels);
+            m_encoder->write(queued.pixels, queued.ptsUs);
+            recycle(std::move(queued.pixels));
+            ++framesWritten;
 
             if (m_audioActive) {
                 m_audioScratch.clear();
-                AudioTap::get().collect(frameIndex, m_settings.fps, m_audioScratch);
+                AudioTap::get().collect(static_cast<int64_t>((framesWritten + 1) * 1000000ULL / static_cast<uint64_t>(frameRate())), m_audioScratch);
                 if (!m_audioScratch.empty()) m_encoder->writeAudio(m_audioScratch.data(), m_audioScratch.size() / 2);
             }
-            ++frameIndex;
         }
     }
 
@@ -215,10 +248,10 @@ namespace NXR::Render {
         }
     }
 
-    void GameplayVideoSession::enqueue(std::vector<uint8_t>&& pixels) {
+    void GameplayVideoSession::enqueue(std::vector<uint8_t>&& pixels, int64_t ptsUs) {
         std::unique_lock lock(m_queueMutex);
         m_spaceFreed.wait(lock, [this] { return m_pending.size() < kMaxPendingFrames || m_closing; });
-        m_pending.push_back(std::move(pixels));
+        m_pending.push_back(QueuedFrame { std::move(pixels), ptsUs });
         lock.unlock();
         m_frameReady.notify_one();
     }

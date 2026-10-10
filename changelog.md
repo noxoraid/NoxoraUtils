@@ -1,3 +1,20 @@
+# v1.4.26
+
+- **New:** the Recorder now works on Windows and macOS. Frames go to a bundled FFmpeg (res/ffmpeg.exe or res/ffmpeg_mac, or your own via the FFmpeg Path setting). Encoder can be Auto, CPU (x264), NVIDIA, AMD, Intel or Apple. Audio is recorded in lockstep like on Android and muxed at the end.
+- **New:** Recorder > Quality: Bitrate up to 120 Mbps, Bitrate Mode (VBR or CBR), H.264 Profile (High or device default), Color Matrix (BT.709 or BT.601) and Color Range (Limited or Full).
+- **Fix:** video colors. The old conversion always used BT.601 with no color tags, so HD video looked slightly off in players that assume BT.709. Now the matrix, range and transfer are chosen by you (default BT.709 Limited) and written into the video, and the conversion uses the same values.
+- **Fix:** with Record Audio on, the saved MP4 is now always smooth, even when the phone lags while you play. The video is rendered one frame per game step (like Record Audio off), and the FMOD mixer is held in lockstep with it: it can only mix as many samples as the frames rendered so far. Music and click sounds are sample-locked to the video, and a slow frame no longer causes gaps or drift.
+- **Change:** the phone speaker is muted while recording, because the mixer is paced by the video instead of real time.
+- **Fix:** the video timestamp no longer drifts at frame rates that do not divide 1,000,000 evenly (60 FPS lost about 24 ms every 10 minutes).
+- **Change:** the audio tap no longer pads silence or drops backlog, which were the sources of the short gaps and jumps.
+
+# v1.4.25
+
+- **Fix:** Recorder audio cutting out for 0.5 to 1 second, music drifting and clicks out of sync. The old method changed the game pitch to chase the fixed step render, which caused the gaps. With Record Audio on, the video is now captured in real time: every video frame and every audio block uses the same clock, so music and click sounds stay locked. No pitch change, no dropped audio.
+- **New:** Recorder > Audio: Record Audio toggle and Audio Offset (-300 to 300 ms) to nudge the sound earlier or later.
+- **Change:** with Record Audio on, the frame rate can drop when the phone lags (like a normal screen recorder). Turn Record Audio off to get the smooth fixed step video without sound.
+- **Fix:** the audio tap now keeps running while nothing is playing, so a click sound after silence no longer lands early.
+
 # v1.4.24
 
 - **New:** the Recorder now records sound. Game audio (music and effects) is captured from the FMOD master output and encoded to AAC inside the same MP4 by MediaCodec. Because the game renders on a fixed step, the master pitch follows the real render speed while you record and the capture is resampled back to normal pitch, so the audio stays locked to the video when the phone lags. A drift check runs every frame and trims or pads tiny gaps. Audio is only captured while the game is running, pauses are cut out like the video.
